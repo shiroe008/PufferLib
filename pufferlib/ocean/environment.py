@@ -3,6 +3,7 @@ import pufferlib.postprocess
 
 from .snake.snake import Snake
 from .squared.squared import Squared
+from .squared2.squared2 import Squared2
 from .pong.pong import Pong
 from .breakout.breakout import Breakout
 from .enduro.enduro import Enduro
@@ -72,6 +73,12 @@ def make_squared(distance_to_target=3, num_targets=1, **kwargs):
     env = pufferlib.postprocess.EpisodeStats(env)
     return pufferlib.emulation.GymnasiumPufferEnv(env=env, **kwargs)
 
+def make_squared2(distance_to_target=3, num_targets=1, **kwargs):
+    from . import sanity
+    env = sanity.Squared2(distance_to_target=distance_to_target, num_targets=num_targets, **kwargs)
+    env = pufferlib.postprocess.EpisodeStats(env)
+    return pufferlib.emulation.GymnasiumPufferEnv(env=env, **kwargs)
+
 def make_bandit(num_actions=10, reward_scale=1, reward_noise=1):
     from . import sanity
     env = sanity.Bandit(num_actions=num_actions, reward_scale=reward_scale,
@@ -129,6 +136,7 @@ MAKE_FNS = {
     'nmmo3': NMMO3,
     'snake': Snake,
     'squared': Squared,
+    'squared2': Squared2,
     'connect4': Connect4,
     'tripletriad': TripleTriad,
     'tactical': Tactical,
