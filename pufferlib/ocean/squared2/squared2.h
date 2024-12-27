@@ -10,23 +10,29 @@ const unsigned char UP = 2;
 const unsigned char LEFT = 3;
 const unsigned char RIGHT = 4;
 
-const unsigned char EMPTY = 0;
+const int INVALID_TILE = 3;
+const int EMPTY = 0;
+const int PLAYER1 = 1;
+const int PLAYER2 = 2;
+
 const unsigned char AGENT = 1;
 const unsigned char TARGET = 2;
  
 typedef struct Squared2 Squared2;
 struct Squared2 {
-    unsigned char* observations;
+    int* observations;
     int* actions;
     float* rewards;
     unsigned char* terminals;
     int grid_size;
     int rows;
     int cols;
+    int total_tiles;
+    int* possible_moves;
+    unsigned char player_to_move;
     int* board_states;
     int grid_square_size;
-    int* board_x;
-    int* board_y;
+    int* visited;
     int size;
     int tick;
     int r;
@@ -34,45 +40,31 @@ struct Squared2 {
 };
 
 void generate_board_positions(Squared2* env) {
-    for (int i = 0; i < (env->grid_size-1) * (env->grid_size-1); i++) {
-        int row = i / (env->grid_size-1);
-        int col = i % (env->grid_size-1);
-        env->board_x[i] = col * (env->grid_square_size-1);
-        env->board_y[i] = row * (env->grid_square_size-1);
-    }
-    for (int i = 0; i < env->rows * env->cols; i++) {
-        int row = i / env->rows;
-        int col = i % env->cols;
-        if ((row+col) % 2 != 0) {
-            env->board_states[row * env->grid_size + col] = -1;
+    env->observations = (int*)calloc(env->total_tiles, sizeof(int));
+    for (int row = 0; row < env->rows; row++) {
+        for (int col = 0; col < env->cols; col++) {
+            if ((row+col) % 2 != 0) {
+                env->observations[row * env->cols + col] = INVALID_TILE;
+            }
         }
     }
 }
 
 void init(Squared2* env) {
-    int board_render_size = (env->grid_size-1)*(env->grid_size-1);
-    env->rows = env->grid_size, env->cols = env->grid_size;
-    int grid_size = env->rows * env->cols;
-    env->board_states = (int*)calloc(grid_size, sizeof(int));
-    
-    if (!env->board_states) {
-        printf("Memory allocation failed for board_states\n");
-        exit(1);
-    }
-    printf("Memory allocated for board_states\n");
-    
-    env->board_x = (int*)calloc(board_render_size, sizeof(int));
-    env->board_y = (int*)calloc(board_render_size, sizeof(int));
-    generate_board_positions(env);
-
+    env->player_to_move = PLAYER2;
+    env->rows = env->grid_size, env->cols = env->grid_size * 2;
+    env->total_tiles = env->rows * env->cols;
+    env->possible_moves = (int*)calloc(env->total_tiles, sizeof(int));
+    env->visited = (int*)calloc(env->total_tiles, sizeof(int));
 }
 
 void allocate(Squared2* env) {
     init(env);
-    env->observations = (unsigned char*)calloc(env->size*env->size, sizeof(unsigned char));
+    env->observations = (int*)calloc(env->total_tiles, sizeof(int));
     env->actions = (int*)calloc(1, sizeof(int));
     env->rewards = (float*)calloc(1, sizeof(float));
     env->terminals = (unsigned char*)calloc(1, sizeof(unsigned char));
+    // generate_board_positions(env);
 }
 
 void free_allocated(Squared2* env) {
@@ -83,16 +75,167 @@ void free_allocated(Squared2* env) {
 }
 
 void reset(Squared2* env) {
-    memset(env->observations, 0, env->size*env->size*sizeof(unsigned char));
-    env->observations[env->size*env->size/2] = AGENT;
-    env->r = env->size/2;
-    env->c = env->size/2;
-    env->tick = 0;
-    int target_idx;
-    do {
-        target_idx = rand() % (env->size*env->size);
-    } while (target_idx == env->size*env->size/2);
-    env->observations[target_idx] = TARGET;
+    memset(env->observations, EMPTY, env->total_tiles * sizeof(int));
+    generate_board_positions(env);
+    memset(env->visited, 0, env->total_tiles * sizeof(int));
+    env->terminals[0] = 0;
+    env->rewards[0] = 0;
+}
+
+int get_neighbors(Squared2* env, int pos, int* neighbors){
+    //env->board_states[pos] = 1;
+    int row = pos / env->cols;
+    int col = pos % env->cols;
+    int count = 0;
+    
+    // Check if current position is valid hex position
+    // Even rows have hexes at even columns, odd rows at odd columns
+    if ((row % 2) != (col % 2)) {
+        return 0;  // Invalid hex position
+    }
+
+    if (row % 2 == 1) {
+        // Neighbor offsets for both even and odd rows
+        const int dr[] = {-1, -1, 0, 0, 1, 1};
+        const int dc[] = {-1, 1, -2, 2, -3, -1};
+    
+        for (int i = 0; i < 6; i++) {
+            int new_row = row + dr[i];
+            int new_col = col + dc[i];
+            int new_pos = new_row * env->cols + new_col;
+            if (new_row >= 0 && new_row < env->rows && 
+                new_col >= 0 && new_col < env->cols && 
+                (new_row % 2) == (new_col % 2)) {
+                // env->board_states[newPos] = 2;
+                neighbors[count++] = new_pos;
+            }
+        } 
+    }
+    else {
+        const int dr[] = {-1, -1, 0, 0, 1, 1};
+        const int dc[] = {3, 1, -2, 2, -1, 1};
+    
+        for (int i = 0; i < 6; i++) {
+            int new_row = row + dr[i];
+            int new_col = col + dc[i];
+            int new_pos = new_row * env->cols + new_col;
+            // Check bounds and ensure new position is valid hex position
+            if (new_row >= 0 && new_row < env->rows &&
+                new_col >= 0 && new_col < env->cols &&
+                (new_row % 2) == (new_col % 2)) {
+                // env->board_states[new_pos] = 2;
+                neighbors[count++] = new_pos;
+            }
+        }
+    }
+    return count;
+}
+
+void dfs(Squared2* env, int pos, int player){
+    int curr_row = pos / env->cols;
+    int curr_col = pos % env->cols;
+
+    if (player == PLAYER1){
+        if ((curr_col == env->cols - 1 && curr_row % 2 == 1) || 
+            (curr_col== env->cols - 2 && curr_row % 2 == 0)){
+            printf("player 1 wins\n");
+            env->terminals[0] = 1;
+            env->rewards[0] = 1.0;
+            reset(env);
+            return;
+        }
+    }
+    else if (player == PLAYER2){
+        if (curr_row == env->rows - 1){
+            printf("player 2 wins\n");
+            env->terminals[0] = 1;
+            env->rewards[0] = -1.0;
+            reset(env);
+            return;
+        }
+    }
+    env->visited[pos] = player;
+
+    int neighbors[6];
+    int num_neighbors = get_neighbors(env, pos, neighbors);
+    for (int i = 0; i < num_neighbors; i++) {
+        int neighbor = neighbors[i];
+        if (env->observations[neighbor] == player && env->visited[neighbor] != player){
+            env->visited[neighbor] = player;
+            dfs(env, neighbor, player);
+        }
+    }
+    return;
+}
+
+void check_win(Squared2* env, int player){
+    memset(env->visited, 0, env->rows * env->cols * sizeof(int));
+    int num_positions = (env->rows) * (env->cols);
+    if (player == PLAYER1){
+        for (int row = 0; row < env->rows; row++) {
+            int cell;
+            if (row % 2 == 0) {
+                cell = row * env->cols;
+            }
+            else {
+                cell = row * env->cols + 1;
+            }
+            if (env->observations[cell] == PLAYER1) {
+                dfs(env, cell, player);
+               }
+            }
+    }
+    
+    else if (player == PLAYER2){
+        for (int col = 0; col < env->cols; col+=2) {
+            int cell = col;
+            if (env->observations[cell] == PLAYER2) {
+                dfs(env, cell, player);
+            }
+        }
+    }
+}
+
+void make_move(Squared2* env, int pos, int player){
+    // cannot place stone on occupied tile
+    if (env->observations[pos] != EMPTY) {
+        return;
+    }
+    else {
+        env->observations[pos] = player;
+    }
+}
+
+int get_posible_moves(Squared2* env){
+    memset(env->possible_moves, 0, env->total_tiles * sizeof(int));
+    int count = 0;
+
+    for(int i = 0; i < env->total_tiles; i++){
+        if(env->observations[i] == EMPTY){
+            env->possible_moves[count++] = i;
+        }
+    }
+    return count;
+}
+
+void make_random_move(Squared2* env, int player) {
+
+    int count = get_posible_moves(env);
+    if (!count) {
+        printf("DRAW\n");
+        env->terminals[0] = 1;
+        env->rewards[0] = 0.0;
+        reset(env);
+        return;
+    }
+    for(int i = count - 1; i > 0; i--){
+        int j = rand() % (i + 1);
+        int temp = env->possible_moves[i];
+        env->possible_moves[i] = env->possible_moves[j];
+        env->possible_moves[j] = temp;
+    }
+    // Try to make a move in a random empty position
+    make_move(env, env->possible_moves[0], player);
 }
 
 void step(Squared2* env) {
@@ -100,39 +243,16 @@ void step(Squared2* env) {
     env->terminals[0] = 0;
     env->rewards[0] = 0;
 
-    env->observations[env->r*env->size + env->c] = EMPTY;
-
-    if (action == DOWN) {
-        env->r += 1;
-    } else if (action == RIGHT) {
-        env->c += 1;
-    } else if (action == UP) {
-        env->r -= 1;
-    } else if (action == LEFT) {
-        env->c -= 1;
+    if (env->player_to_move == PLAYER1) {
+        env->player_to_move = PLAYER2;
     }
-
-    if (env->tick > 3*env->size 
-            || env->r < 0
-            || env->c < 0
-            || env->r >= env->size
-            || env->c >= env->size) {
-        env->terminals[0] = 1;
-        env->rewards[0] = -1.0;
-        reset(env);
-        return;
-    }
-
-    int pos = env->r*env->size + env->c;
-    if (env->observations[pos] == TARGET) {
-        env->terminals[0] = 1;
-        env->rewards[0] = 1.0;
-        reset(env);
-        return;
-    }
-
-    env->observations[pos] = AGENT;
-    env->tick += 1;
+    else {
+        env->player_to_move = PLAYER1;
+    }   
+    
+    make_random_move(env, env->player_to_move);
+    check_win(env, PLAYER1);
+    check_win(env, PLAYER2);
 }
 
 const Color STONE_GRAY = (Color){80, 80, 80, 255};
@@ -142,7 +262,6 @@ const Color PUFF_WHITE = (Color){241, 241, 241, 241};
 const Color PUFF_BACKGROUND = (Color){6, 24, 24, 255};
 const Color PUFF_BACKGROUND2 = (Color){18, 72, 72, 255};
 
-
 typedef struct Client Client;
 struct Client {
     Texture2D ball;
@@ -150,7 +269,7 @@ struct Client {
 
 Client* make_client(Squared2* env) {
     Client* client = (Client*)calloc(1, sizeof(Client));
-    int px = 64*env->size;
+    int px = 128*env->size;
     InitWindow(px, px, "PufferLib Squared2");
     SetTargetFPS(5);
 
@@ -163,7 +282,6 @@ void close_client(Client* client) {
     free(client);
 }
 
-
 void render(Client* client, Squared2* env) {
     if (IsKeyDown(KEY_ESCAPE)) {
         exit(0);
@@ -173,78 +291,48 @@ void render(Client* client, Squared2* env) {
     ClearBackground(PUFF_BACKGROUND);
 
     float radius = 20.0;
-    for (int i = 0; i < env->rows * env->cols; i++) {
-        int row = i / env->cols;
-        int col = i % env->cols;
+    float cos30 = cos(30 * M_PI / 180);
+    
+    //env->observations[2*env->cols + 0] = PLAYER1;
+    //env->observations[2*env->cols + 2] = PLAYER1;
+    //env->observations[0*env->cols + 4] = PLAYER2;
+    //env->observations[1*env->cols + 5] = PLAYER2;
+    //env->observations[2*env->cols + 4] = PLAYER2;
+    //env->observations[3*env->cols + 5] = PLAYER2;
+    //env->observations[4*env->cols + 4] = PLAYER2;
+    //env->observations[2*env->cols + 6] = PLAYER1;
+    //env->observations[2*env->cols + 8] = PLAYER1;
 
-        if (env->board_states[row * env->grid_size + col] == -1) {
-            continue;
-        }
-        else if (env->board_states[row * env->grid_size + col] == 0) {
-            if (row % 2 == 0) {
-                DrawPoly((Vector2){200 + cos(30 * M_PI / 180) * (row+col) * radius,
-                        200 + col * radius * 1.5}, 6, radius, 90, PUFF_RED);
-                DrawPolyLines((Vector2){200 + cos(30 * M_PI / 180) * (row+col) * radius,
-                        200 + col * radius * 1.5}, 6, radius, 90, PUFF_WHITE);
+    for (int row = 0; row < env->rows; row++) {
+        for (int col = 0; col < env->cols; col++) {
+            int tile_type= env->observations[row * env->cols + col];
+            if (tile_type == INVALID_TILE) {
+                continue;
             }
             else {
-                DrawPoly((Vector2){200 + cos(30 * M_PI / 180) * ((2*col-1)/2 + row) * radius,
-                        200 + row * radius * 1.5}, 6, radius, 90, PUFF_RED);
-                DrawPolyLines((Vector2){200 + cos(30 * M_PI / 180) * ((2*col-1)/2 + row) * radius,
-                        200 + row * radius * 1.5}, 6, radius, 90, PUFF_WHITE);
+                Color color;
+                if (tile_type == EMPTY) {
+                    color = PUFF_WHITE;
+                }
+                else if (tile_type == PLAYER1) {
+                    color = PUFF_RED;
+                } else if (tile_type == PLAYER2) {
+                    color = PUFF_CYAN;
+                }
+                if (row % 2 == 0) {
+                    DrawPoly((Vector2){200 + cos30 * (row+col) * radius,
+                            200 + row * radius * 1.5}, 6, radius, 90, color);
+                    DrawPolyLines((Vector2){200 + cos30 * (row+col) * radius,
+                            200 + row * radius * 1.5}, 6, radius, 90, STONE_GRAY);
+                }
+                else {
+                    DrawPoly((Vector2){200 + cos30 * ((2*col-1)/2 + row) * radius,
+                            200 + row * radius * 1.5}, 6, radius, 90, color);
+                    DrawPolyLines((Vector2){200 + cos30 * ((2*col-1)/2 + row) * radius,
+                            200 + row * radius * 1.5}, 6, radius, 90, STONE_GRAY);
+                }
             }
         }
     }
-
-    //for (int i = 0; i < env->size; i++) {
-    //    DrawPoly((Vector2){2 * i * radius, 64 * env->size / 2}, 6, radius, 90, PUFF_RED);
-    //}
-    
-//    int rows = env->grid_size, cols = env->grid_size;
-//    int array[10][10] = {-1};
-//    for (int j = 0; j < cols; j++) {
-//        if (j == 0) {
-//            for (int i = 0; i < rows; i+=2) {
-//                array[i][j] = 0;
-//            }
-//        }
-//        else {
-//            for (int i = 1; i < rows; i+=2) {
-//                array[i][j] = 0;
-//            }
-//        }
-//    }
-//
-//
-//    for (int j = 0; j < cols; j++) {
-//        if (j % 2 == 0) {
-//            for (int i = 0; i < rows; i+=2) {
-//        DrawPoly((Vector2){200 + cos(30 * M_PI / 180) * (i+j) * radius,
-//                200 + j * radius * 1.5}, 6, radius, 90, PUFF_RED);
-//        DrawPolyLines((Vector2){200 + cos(30 * M_PI / 180) * (i+j) * radius,
-//                200 +j * radius * 1.5}, 6, radius, 90, PUFF_WHITE);
-//            }
-//        }
-//        else {
-//            for (int i = 1; i < rows; i+=2) {
-//        DrawPoly((Vector2){200 + cos(30 * M_PI / 180) * ((2*i-1)/2 + j) * radius,
-//                200 + j * radius * 1.5}, 6, radius, 90, PUFF_RED);
-//        DrawPolyLines((Vector2){200 + cos(30 * M_PI / 180) * ((2*i-1)/2 + j) * radius,
-//                200 + j * radius * 1.5}, 6, radius, 90, PUFF_WHITE);
-//            }
-//        }
-//    }
-//
-    // int px = 64;
-    // for (int i = 0; i < env->size; i++) {
-    //    for (int j = 0; j < env->size; j++) {
-    //        int tex = env->observations[i*env->size + j];
-    //        if (tex == EMPTY) {
-    //            continue;
-    //        }
-    //        Color color = (tex == AGENT) ? (Color){0, 127, 127, 255} : (Color){255, 0, 0, 255};
-    //        DrawRectangle(j*px, i*px, px, px, color);
-    //    }
-    //}
     EndDrawing();
 }

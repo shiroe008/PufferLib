@@ -5,7 +5,7 @@ int main() {
     //Weights* weights = load_weights("resources/pong_weights.bin", 133764);
     //LinearLSTM* net = make_linearlstm(weights, 1, 8, 3);
 
-    Squared2 env = {.size = 11, .grid_size = 6};
+    Squared2 env = {.size = 5, .grid_size = 5};
     allocate(&env);
 
     Client* client = make_client(&env);
