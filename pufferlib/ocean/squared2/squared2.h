@@ -29,6 +29,7 @@ struct Squared2 {
     int cols;
     int total_tiles;
     int* possible_moves;
+    int num_empty_tiles;
     unsigned char player_to_move;
     int* board_states;
     int grid_square_size;
@@ -76,6 +77,7 @@ void free_allocated(Squared2* env) {
 
 void reset(Squared2* env) {
     memset(env->observations, EMPTY, env->total_tiles * sizeof(int));
+    env->num_empty_tiles = get_posible_moves(env);
     generate_board_positions(env);
     memset(env->visited, 0, env->total_tiles * sizeof(int));
     env->terminals[0] = 0;
@@ -138,7 +140,7 @@ void dfs(Squared2* env, int pos, int player){
     if (player == PLAYER1){
         if ((curr_col == env->cols - 1 && curr_row % 2 == 1) || 
             (curr_col== env->cols - 2 && curr_row % 2 == 0)){
-            printf("player 1 wins\n");
+            // printf("player 1 wins\n");
             env->terminals[0] = 1;
             env->rewards[0] = 1.0;
             reset(env);
@@ -147,7 +149,7 @@ void dfs(Squared2* env, int pos, int player){
     }
     else if (player == PLAYER2){
         if (curr_row == env->rows - 1){
-            printf("player 2 wins\n");
+            // printf("player 2 wins\n");
             env->terminals[0] = 1;
             env->rewards[0] = -1.0;
             reset(env);
@@ -168,9 +170,16 @@ void dfs(Squared2* env, int pos, int player){
     return;
 }
 
-void check_win(Squared2* env, int player){
-    memset(env->visited, 0, env->rows * env->cols * sizeof(int));
-    int num_positions = (env->rows) * (env->cols);
+void check_win(Squared2* env, int player, int possible_moves){
+    if (!possible_moves) {
+        // printf("DRAW\n");
+        env->terminals[0] = 1;
+        env->rewards[0] = 0.0;
+        reset(env);
+        return;
+    }
+
+    memset(env->visited, 0, env->total_tiles * sizeof(int));
     if (player == PLAYER1){
         for (int row = 0; row < env->rows; row++) {
             int cell;
@@ -219,15 +228,7 @@ int get_posible_moves(Squared2* env){
 }
 
 void make_random_move(Squared2* env, int player) {
-
     int count = get_posible_moves(env);
-    if (!count) {
-        printf("DRAW\n");
-        env->terminals[0] = 1;
-        env->rewards[0] = 0.0;
-        reset(env);
-        return;
-    }
     for(int i = count - 1; i > 0; i--){
         int j = rand() % (i + 1);
         int temp = env->possible_moves[i];
@@ -239,20 +240,23 @@ void make_random_move(Squared2* env, int player) {
 }
 
 void step(Squared2* env) {
+    env->num_empty_tiles = get_posible_moves(env);
+    // int action_idx = rand() % env->num_empty_tiles;
+    //int action = env->possible_moves[action_idx];
     int action = env->actions[0];
     env->terminals[0] = 0;
     env->rewards[0] = 0;
-
-    if (env->player_to_move == PLAYER1) {
-        env->player_to_move = PLAYER2;
-    }
-    else {
-        env->player_to_move = PLAYER1;
-    }   
-    
-    make_random_move(env, env->player_to_move);
-    check_win(env, PLAYER1);
-    check_win(env, PLAYER2);
+    env-> player_to_move = env->player_to_move ^ 3;
+    //if (env->player_to_move == PLAYER1) {
+    //    env->player_to_move = PLAYER2;
+    //}
+    //else {
+    //    env->player_to_move = PLAYER1;
+    //}   
+    check_win(env, PLAYER1, env->num_empty_tiles);
+    check_win(env, PLAYER2, env->num_empty_tiles);
+    make_move(env, action, env->player_to_move);
+    //make_random_move(env, env->player_to_move);
 }
 
 const Color STONE_GRAY = (Color){80, 80, 80, 255};

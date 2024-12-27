@@ -56,6 +56,5 @@ def test_env():
         if terms or trunc:
             break
 
-
 if __name__ == '__main__':
     test_env()
