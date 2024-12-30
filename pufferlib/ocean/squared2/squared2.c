@@ -5,8 +5,10 @@ void demo(){
     //Weights* weights = load_weights("resources/pong_weights.bin", 133764);
     //LinearLSTM* net = make_linearlstm(weights, 1, 8, 3);
 
-    Squared2 env = {.size = 5, .grid_size = 5};
+    Squared2 env = { .grid_size = 5};
     allocate(&env);
+    // init(&env);
+    // generate_board_positions(&env);
 
     Client* client = make_client(&env);
     reset(&env);
@@ -34,7 +36,7 @@ void demo(){
 }
 
 void test_performance(float test_time) {
-    Squared2 env = {.size = 5, .grid_size = 5};
+    Squared2 env = { .grid_size = 5};
     allocate(&env);
     reset(&env);
 
@@ -52,7 +54,7 @@ void test_performance(float test_time) {
 }
 
 int main() {
-    // demo();
-    test_performance(5);
+    demo();
+    // test_performance(5);
     return 0;
 }

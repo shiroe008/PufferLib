@@ -32,39 +32,39 @@ struct Squared2 {
     int num_empty_tiles;
     unsigned char player_to_move;
     int* board_states;
-    int grid_square_size;
     int* visited;
-    int size;
-    int tick;
-    int r;
-    int c;
 };
 
 void generate_board_positions(Squared2* env) {
-    env->observations = (int*)calloc(env->total_tiles, sizeof(int));
+    // comment the line below when running in python
+    // env->observations = (int*)calloc(env->total_tiles, sizeof(int));
     for (int row = 0; row < env->rows; row++) {
         for (int col = 0; col < env->cols; col++) {
             if ((row+col) % 2 != 0) {
                 env->observations[row * env->cols + col] = INVALID_TILE;
+                // env->board_states[row * env->cols + col] = INVALID_TILE;
+                // memcpy(env->observations[row * env->cols + col], env->board_states[row * env->cols + col], sizeof(int));
             }
         }
     }
 }
 
 void init(Squared2* env) {
-    env->player_to_move = PLAYER2;
+    env->player_to_move = PLAYER1;
     env->rows = env->grid_size, env->cols = env->grid_size * 2;
     env->total_tiles = env->rows * env->cols;
     env->possible_moves = (int*)calloc(env->total_tiles, sizeof(int));
     env->visited = (int*)calloc(env->total_tiles, sizeof(int));
+    env->board_states = (int*)calloc(env->total_tiles, sizeof(int));
+    generate_board_positions(env);
 }
 
 void allocate(Squared2* env) {
-    init(env);
     env->observations = (int*)calloc(env->total_tiles, sizeof(int));
     env->actions = (int*)calloc(1, sizeof(int));
     env->rewards = (float*)calloc(1, sizeof(float));
     env->terminals = (unsigned char*)calloc(1, sizeof(unsigned char));
+    init(env);
     // generate_board_positions(env);
 }
 
@@ -77,6 +77,7 @@ void free_allocated(Squared2* env) {
 
 void reset(Squared2* env) {
     memset(env->observations, EMPTY, env->total_tiles * sizeof(int));
+    memset(env->board_states, EMPTY, env->total_tiles * sizeof(int));
     env->num_empty_tiles = get_posible_moves(env);
     generate_board_positions(env);
     memset(env->visited, 0, env->total_tiles * sizeof(int));
@@ -85,7 +86,6 @@ void reset(Squared2* env) {
 }
 
 int get_neighbors(Squared2* env, int pos, int* neighbors){
-    //env->board_states[pos] = 1;
     int row = pos / env->cols;
     int col = pos % env->cols;
     int count = 0;
@@ -108,7 +108,6 @@ int get_neighbors(Squared2* env, int pos, int* neighbors){
             if (new_row >= 0 && new_row < env->rows && 
                 new_col >= 0 && new_col < env->cols && 
                 (new_row % 2) == (new_col % 2)) {
-                // env->board_states[newPos] = 2;
                 neighbors[count++] = new_pos;
             }
         } 
@@ -125,7 +124,6 @@ int get_neighbors(Squared2* env, int pos, int* neighbors){
             if (new_row >= 0 && new_row < env->rows &&
                 new_col >= 0 && new_col < env->cols &&
                 (new_row % 2) == (new_col % 2)) {
-                // env->board_states[new_pos] = 2;
                 neighbors[count++] = new_pos;
             }
         }
@@ -141,18 +139,18 @@ void dfs(Squared2* env, int pos, int player){
         if ((curr_col == env->cols - 1 && curr_row % 2 == 1) || 
             (curr_col== env->cols - 2 && curr_row % 2 == 0)){
             // printf("player 1 wins\n");
+            reset(env);
             env->terminals[0] = 1;
             env->rewards[0] = 1.0;
-            reset(env);
             return;
         }
     }
     else if (player == PLAYER2){
         if (curr_row == env->rows - 1){
             // printf("player 2 wins\n");
+            reset(env);
             env->terminals[0] = 1;
             env->rewards[0] = -1.0;
-            reset(env);
             return;
         }
     }
@@ -172,10 +170,10 @@ void dfs(Squared2* env, int pos, int player){
 
 void check_win(Squared2* env, int player, int possible_moves){
     if (!possible_moves) {
-        // printf("DRAW\n");
+        // printf("MATHEMATICALLY A DRAW IS NOT POSSIBLE\n");
+        reset(env);
         env->terminals[0] = 1;
         env->rewards[0] = 0.0;
-        reset(env);
         return;
     }
 
@@ -246,6 +244,9 @@ void step(Squared2* env) {
     int action = env->actions[0];
     env->terminals[0] = 0;
     env->rewards[0] = 0;
+    make_move(env, action, env->player_to_move);
+    check_win(env, PLAYER1, env->num_empty_tiles);
+    check_win(env, PLAYER2, env->num_empty_tiles);
     env-> player_to_move = env->player_to_move ^ 3;
     //if (env->player_to_move == PLAYER1) {
     //    env->player_to_move = PLAYER2;
@@ -253,9 +254,6 @@ void step(Squared2* env) {
     //else {
     //    env->player_to_move = PLAYER1;
     //}   
-    check_win(env, PLAYER1, env->num_empty_tiles);
-    check_win(env, PLAYER2, env->num_empty_tiles);
-    make_move(env, action, env->player_to_move);
     //make_random_move(env, env->player_to_move);
 }
 
@@ -273,7 +271,7 @@ struct Client {
 
 Client* make_client(Squared2* env) {
     Client* client = (Client*)calloc(1, sizeof(Client));
-    int px = 128*env->size;
+    int px = 128*env->grid_size;
     InitWindow(px, px, "PufferLib Squared2");
     SetTargetFPS(5);
 
