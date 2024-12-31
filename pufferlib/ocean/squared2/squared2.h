@@ -33,6 +33,10 @@ struct Squared2 {
     unsigned char player_to_move;
     int* board_states;
     int* visited;
+    //bool reach_top;
+    //bool reach_bot;
+    //bool reach_left;
+    //bool reach_right;
 };
 
 void generate_board_positions(Squared2* env) {
@@ -57,6 +61,10 @@ void init(Squared2* env) {
     env->visited = (int*)calloc(env->total_tiles, sizeof(int));
     env->board_states = (int*)calloc(env->total_tiles, sizeof(int));
     generate_board_positions(env);
+    //env->reach_top = false;
+    //env->reach_bot = false;
+    //env->reach_left = false;
+    //env->reach_right = false;
 }
 
 void allocate(Squared2* env) {
@@ -68,11 +76,18 @@ void allocate(Squared2* env) {
     // generate_board_positions(env);
 }
 
+void free_initialized(Squared2* env) {
+    free(env->board_states);
+    free(env->visited);
+    free(env->possible_moves);
+}
+
 void free_allocated(Squared2* env) {
     free(env->observations);
     free(env->actions);
     free(env->rewards);
     free(env->terminals);
+    free_initialized(env);
 }
 
 void reset(Squared2* env) {
@@ -83,6 +98,10 @@ void reset(Squared2* env) {
     memset(env->visited, 0, env->total_tiles * sizeof(int));
     env->terminals[0] = 0;
     env->rewards[0] = 0;
+    //env->reach_top = false;
+    //env->reach_bot = false;
+    //env->reach_left = false;
+    //env->reach_right = false;
 }
 
 int get_neighbors(Squared2* env, int pos, int* neighbors){
@@ -131,6 +150,56 @@ int get_neighbors(Squared2* env, int pos, int* neighbors){
     return count;
 }
 
+//bool dfs2(Squared2* env, int pos, int player, bool reach_edge1, bool reach_edge2){
+//    env->visited[pos] = player;
+//
+//    int curr_row = pos / env->cols;
+//    int curr_col = pos % env->cols;
+//    if (player == PLAYER1){
+//        if (curr_col == 0) reach_edge1 = true;
+//        else if (curr_col == 1) reach_edge1 = true;
+//        else if (curr_col == env->cols - 1) reach_edge2 = true;
+//        else if (curr_col == env->cols - 2) reach_edge2 = true;
+//    } else {
+//        if (curr_row == 0) reach_edge1 = true;
+//        else if (curr_row == env->rows - 1) reach_edge2 = true;
+//    }
+//
+//    if (reach_edge1 && reach_edge2) return true;
+//
+//    int neighbors[6];
+//    int num_neighbors = get_neighbors(env, pos, neighbors);
+//    for (int i = 0; i < num_neighbors; i++) {
+//        int neighbor = neighbors[i];
+//        if (env->observations[neighbor] == player && env->visited[neighbor] != player){
+//            dfs2(env, neighbor, player, reach_edge1, reach_edge2);
+//        }
+//    }
+//    return false;
+//}
+//
+//void check_win2(Squared2* env, int player, int pos){
+//    memset(env->visited, 0, env->total_tiles * sizeof(int));
+//    bool has_won;
+//    if (player == PLAYER1){
+//        has_won = dfs2(env, player, pos, env->reach_left, env->reach_right);
+//        if (has_won){
+//            reset(env);
+//            env->terminals[0] = 1;
+//            env->rewards[0] = 1.0;
+//            return;
+//        }
+//    } else {
+//        has_won = dfs2(env, player, pos, env->reach_left, env->reach_right);
+//        if (has_won){
+//            reset(env);
+//            env->terminals[0] = 1;
+//            env->rewards[0] = -1.0;
+//            return;
+//        }
+//    }
+//}
+
 void dfs(Squared2* env, int pos, int player){
     int curr_row = pos / env->cols;
     int curr_col = pos % env->cols;
@@ -169,13 +238,13 @@ void dfs(Squared2* env, int pos, int player){
 }
 
 void check_win(Squared2* env, int player, int possible_moves){
-    if (!possible_moves) {
-        // printf("MATHEMATICALLY A DRAW IS NOT POSSIBLE\n");
-        reset(env);
-        env->terminals[0] = 1;
-        env->rewards[0] = 0.0;
-        return;
-    }
+    //if (!possible_moves) {
+    //    // printf("MATHEMATICALLY A DRAW IS NOT POSSIBLE\n");
+    //    reset(env);
+    //    env->terminals[0] = 1;
+    //    env->rewards[0] = 0.0;
+    //    return;
+    //}
 
     memset(env->visited, 0, env->total_tiles * sizeof(int));
     if (player == PLAYER1){
@@ -190,10 +259,9 @@ void check_win(Squared2* env, int player, int possible_moves){
             if (env->observations[cell] == PLAYER1) {
                 dfs(env, cell, player);
                }
-            }
+        }
     }
-    
-    else if (player == PLAYER2){
+    else {
         for (int col = 0; col < env->cols; col+=2) {
             int cell = col;
             if (env->observations[cell] == PLAYER2) {
@@ -245,8 +313,10 @@ void step(Squared2* env) {
     env->terminals[0] = 0;
     env->rewards[0] = 0;
     make_move(env, action, env->player_to_move);
-    check_win(env, PLAYER1, env->num_empty_tiles);
-    check_win(env, PLAYER2, env->num_empty_tiles);
+    //check_win(env, env->num_empty_tiles);
+    //check_win2(env, env->player_to_move, action);
+    check_win(env, env->player_to_move, env->num_empty_tiles);
+    //check_win(env, PLAYER2, env->num_empty_tiles);
     env-> player_to_move = env->player_to_move ^ 3;
     //if (env->player_to_move == PLAYER1) {
     //    env->player_to_move = PLAYER2;

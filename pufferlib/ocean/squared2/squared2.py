@@ -45,16 +45,18 @@ class Squared2(pufferlib.PufferEnv):
         self.c_envs.close()
 
 def test_env(num_envs=1, grid_size=5, player_to_move=1):
-    env = Squared2(grid_size=grid_size, player_to_move=player_to_move)
+    env = Squared2(num_envs=num_envs, grid_size=grid_size, player_to_move=player_to_move)
     env.reset()
     print(env.observations)
     while True:
         env.render()
-        possible_moves, num_valid_moves = env.c_envs.get_valid_moves()
-        print(num_valid_moves, )
-        action_idx = np.random.randint(num_valid_moves[0])
-        action_idx = np.array([np.random.randint(nvm) for nvm in num_valid_moves], dtype=np.int32)
-        action = possible_moves[np.arange(num_envs), action_idx]
+        possible_moves = np.array([np.where(obs == 0) for obs in env.observations])
+        action = np.array([np.random.choice(moves[0]) for moves in possible_moves])
+        # possible_moves, num_valid_moves = env.c_envs.get_valid_moves()
+        # print(num_valid_moves, )
+        # action_idx = np.random.randint(num_valid_moves[0])
+        # action_idx = np.array([np.random.randint(nvm) for nvm in num_valid_moves], dtype=np.int32)
+        # action = possible_moves[np.arange(num_envs), action_idx]
         # action = env.action_space.sample()
         obs, rew, terms, trunc, info = env.step(action)
         print(rew, terms, trunc, info)
@@ -62,7 +64,7 @@ def test_env(num_envs=1, grid_size=5, player_to_move=1):
         #     break
 
 def test_performance(timeout=10,):
-    num_envs=1000;
+    num_envs=1
     env = Squared2(num_envs=num_envs, grid_size=5, player_to_move=1)
     env.reset()
     tick = 0
@@ -72,6 +74,8 @@ def test_performance(timeout=10,):
     import time
     start = time.time()
     while time.time() - start < timeout:
+        # possible_moves = np.array([np.where(obs == 0) for obs in env.observations])
+        # action = np.array([np.random.choice(moves[0]) for moves in possible_moves])
         possible_moves, num_valid_moves = env.c_envs.get_valid_moves()
         # print(num_valid_moves, )
         action_idx = np.array([np.random.randint(nvm) for nvm in num_valid_moves], dtype=np.int32)
@@ -84,5 +88,5 @@ def test_performance(timeout=10,):
     print(f'SPS: {sps:,}')
 
 if __name__ == '__main__':
-    # test_env(grid_size=5)
+    # test_env(num_envs=10, grid_size=5)
     test_performance()

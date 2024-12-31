@@ -51,10 +51,11 @@ void test_performance(float test_time) {
     }
     int end = time(NULL);
     printf("SPS: %f\n", (float)i / (end - start));
+    free_allocated(&env);
 }
 
 int main() {
-    demo();
-    // test_performance(5);
+    // demo();
+    test_performance(5);
     return 0;
 }
