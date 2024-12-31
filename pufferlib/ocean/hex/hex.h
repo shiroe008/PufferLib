@@ -18,8 +18,8 @@ const int PLAYER2 = 2;
 const unsigned char AGENT = 1;
 const unsigned char TARGET = 2;
  
-typedef struct Squared2 Squared2;
-struct Squared2 {
+typedef struct Hex Hex;
+struct Hex {
     int* observations;
     int* actions;
     float* rewards;
@@ -39,7 +39,7 @@ struct Squared2 {
     //bool reach_right;
 };
 
-void generate_board_positions(Squared2* env) {
+void generate_board_positions(Hex* env) {
     // comment the line below when running in python
     env->observations = (int*)calloc(env->total_tiles, sizeof(int));
     for (int row = 0; row < env->rows; row++) {
@@ -53,7 +53,7 @@ void generate_board_positions(Squared2* env) {
     }
 }
 
-void init(Squared2* env) {
+void init(Hex* env) {
     env->player_to_move = PLAYER1;
     env->rows = env->grid_size, env->cols = env->grid_size * 2;
     env->total_tiles = env->rows * env->cols;
@@ -67,7 +67,7 @@ void init(Squared2* env) {
     //env->reach_right = false;
 }
 
-void allocate(Squared2* env) {
+void allocate(Hex* env) {
     env->observations = (int*)calloc(env->total_tiles, sizeof(int));
     env->actions = (int*)calloc(1, sizeof(int));
     env->rewards = (float*)calloc(1, sizeof(float));
@@ -76,13 +76,13 @@ void allocate(Squared2* env) {
     // generate_board_positions(env);
 }
 
-void free_initialized(Squared2* env) {
+void free_initialized(Hex* env) {
     free(env->board_states);
     free(env->visited);
     free(env->possible_moves);
 }
 
-void free_allocated(Squared2* env) {
+void free_allocated(Hex* env) {
     free(env->observations);
     free(env->actions);
     free(env->rewards);
@@ -90,7 +90,7 @@ void free_allocated(Squared2* env) {
     free_initialized(env);
 }
 
-void reset(Squared2* env) {
+void reset(Hex* env) {
     memset(env->observations, EMPTY, env->total_tiles * sizeof(int));
     memset(env->board_states, EMPTY, env->total_tiles * sizeof(int));
     env->num_empty_tiles = get_posible_moves(env);
@@ -104,7 +104,7 @@ void reset(Squared2* env) {
     //env->reach_right = false;
 }
 
-int get_neighbors(Squared2* env, int pos, int* neighbors){
+int get_neighbors(Hex* env, int pos, int* neighbors){
     int row = pos / env->cols;
     int col = pos % env->cols;
     int count = 0;
@@ -150,7 +150,7 @@ int get_neighbors(Squared2* env, int pos, int* neighbors){
     return count;
 }
 
-//bool dfs2(Squared2* env, int pos, int player, bool reach_edge1, bool reach_edge2){
+//bool dfs2(Hex* env, int pos, int player, bool reach_edge1, bool reach_edge2){
 //    env->visited[pos] = player;
 //
 //    int curr_row = pos / env->cols;
@@ -178,7 +178,7 @@ int get_neighbors(Squared2* env, int pos, int* neighbors){
 //    return false;
 //}
 //
-//void check_win2(Squared2* env, int player, int pos){
+//void check_win2(Hex* env, int player, int pos){
 //    memset(env->visited, 0, env->total_tiles * sizeof(int));
 //    bool has_won;
 //    if (player == PLAYER1){
@@ -200,7 +200,7 @@ int get_neighbors(Squared2* env, int pos, int* neighbors){
 //    }
 //}
 
-void dfs(Squared2* env, int pos, int player){
+void dfs(Hex* env, int pos, int player){
     int curr_row = pos / env->cols;
     int curr_col = pos % env->cols;
 
@@ -237,7 +237,7 @@ void dfs(Squared2* env, int pos, int player){
     return;
 }
 
-void check_win(Squared2* env, int player, int possible_moves){
+void check_win(Hex* env, int player, int possible_moves){
     //if (!possible_moves) {
     //    // printf("MATHEMATICALLY A DRAW IS NOT POSSIBLE\n");
     //    reset(env);
@@ -271,7 +271,7 @@ void check_win(Squared2* env, int player, int possible_moves){
     }
 }
 
-void make_move(Squared2* env, int pos, int player){
+void make_move(Hex* env, int pos, int player){
     // cannot place stone on occupied tile
     if (env->observations[pos] != EMPTY) {
         return;
@@ -281,7 +281,7 @@ void make_move(Squared2* env, int pos, int player){
     }
 }
 
-int get_posible_moves(Squared2* env){
+int get_posible_moves(Hex* env){
     memset(env->possible_moves, 0, env->total_tiles * sizeof(int));
     int count = 0;
 
@@ -293,7 +293,7 @@ int get_posible_moves(Squared2* env){
     return count;
 }
 
-void make_random_move(Squared2* env, int player) {
+void make_random_move(Hex* env, int player) {
     int count = get_posible_moves(env);
     for(int i = count - 1; i > 0; i--){
         int j = rand() % (i + 1);
@@ -305,7 +305,7 @@ void make_random_move(Squared2* env, int player) {
     make_move(env, env->possible_moves[0], player);
 }
 
-void step(Squared2* env) {
+void step(Hex* env) {
     env->num_empty_tiles = get_posible_moves(env);
     // int action_idx = rand() % env->num_empty_tiles;
     //int action = env->possible_moves[action_idx];
@@ -339,10 +339,10 @@ struct Client {
     Texture2D ball;
 };
 
-Client* make_client(Squared2* env) {
+Client* make_client(Hex* env) {
     Client* client = (Client*)calloc(1, sizeof(Client));
     int px = 128*env->grid_size;
-    InitWindow(px, px, "PufferLib Squared2");
+    InitWindow(px, px, "PufferLib Hex");
     SetTargetFPS(5);
 
     //client->agent = LoadTexture("resources/puffers_128.png");
@@ -354,7 +354,7 @@ void close_client(Client* client) {
     free(client);
 }
 
-void render(Client* client, Squared2* env) {
+void render(Client* client, Hex* env) {
     if (IsKeyDown(KEY_ESCAPE)) {
         exit(0);
     }

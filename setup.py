@@ -247,6 +247,7 @@ extension_paths = [
     'pufferlib/ocean/tactical/c_tactical',
     'pufferlib/ocean/squared/cy_squared',
     'pufferlib/ocean/squared2/cy_squared2',
+    'pufferlib/ocean/hex/cy_hex',
     'pufferlib/ocean/snake/cy_snake',
     'pufferlib/ocean/pong/cy_pong',
     'pufferlib/ocean/breakout/cy_breakout',
