@@ -17,6 +17,33 @@ const int PLAYER2 = 2;
 
 const unsigned char AGENT = 1;
 const unsigned char TARGET = 2;
+
+typedef struct Group Group;
+struct Group {
+    int parent;
+    int size;
+};
+
+int find(Group* groups, int x) {
+    if (groups[x].parent != x)
+        groups[x].parent = find(groups, groups[x].parent);
+    return groups[x].parent;
+}
+
+void union_groups(Group* groups, int pos1, int pos2) {
+    pos1 = find(groups, pos1);
+    pos2 = find(groups, pos2);
+    
+    if (pos1 == pos2) return;
+    
+    if (groups[pos1].size < groups[pos2].size) {
+        groups[pos1].parent = pos2;
+        groups[pos2].size += groups[pos1].size;
+    } else {
+        groups[pos2].parent = pos1;
+        groups[pos1].size += groups[pos2].size;
+    }
+}
  
 typedef struct Hex Hex;
 struct Hex {
@@ -29,10 +56,18 @@ struct Hex {
     int cols;
     int total_tiles;
     int* possible_moves;
+    int* possible_moves_idx;
     int num_empty_tiles;
     unsigned char player_to_move;
-    int* board_states;
     int* visited;
+    Group* p1;
+    Group* p2;
+    int edge1;
+    int edge2;
+    Group reach_top;
+    Group reach_bot;
+    Group reach_left;
+    Group reach_right;
     //bool reach_top;
     //bool reach_bot;
     //bool reach_left;
@@ -46,9 +81,65 @@ void generate_board_positions(Hex* env) {
         for (int col = 0; col < env->cols; col++) {
             if ((row+col) % 2 != 0) {
                 env->observations[row * env->cols + col] = INVALID_TILE;
-                // env->board_states[row * env->cols + col] = INVALID_TILE;
-                // memcpy(env->observations[row * env->cols + col], env->board_states[row * env->cols + col], sizeof(int));
             }
+        }
+    }
+}
+
+void init_groups(Hex* env) {
+    for (int i = 0; i < env->total_tiles; i++) {
+            env->p1[i].parent = i;
+            env->p1[i].size = 1;
+            env->p2[i].parent = i;
+            env->p2[i].size = 1;
+    }
+    env->p1[env->edge1].parent = env->edge1;
+    env->p1[env->edge1].size = 1;
+    env->p1[env->edge2].parent = env->edge2;
+    env->p1[env->edge2].size = 1;
+    env->p2[env->edge1].parent = env->edge1;
+    env->p2[env->edge1].size = 1;
+    env->p2[env->edge2].parent = env->edge2;
+    env->p2[env->edge2].size = 1;
+
+    int cell;
+    // Join virtual left to left column
+    for (int i = 0; i < env-> rows; i++) {
+        if (i % 2 == 0) {
+            cell = i * env->cols;
+            union_groups(env->p1, env->edge1, cell);
+        } else {
+            cell = i * env->cols + 1;
+            union_groups(env->p1, env->edge1, cell);
+        }
+    }
+
+    // Join virutal right to right column
+    for (int i = 0; i < env->rows; i++) {
+        if (i % 2 == 0) {
+            cell = i * env->cols + env->cols - 2;
+            union_groups(env->p1, env->edge2, cell);
+        } else {
+            cell = i * env->cols + env->cols - 1;
+            union_groups(env->p1,  env->edge2, cell);
+        }
+    }
+
+    // Join virual top to top row
+    for (int i = 0; i < env->cols; i+=2) {
+        union_groups(env->p2, env->edge1, i);
+    }
+
+    // Join virtual bottom to bottom row
+    if (env->rows % 2 == 1) {
+        for (int i = 0; i < env->cols; i+=2) {
+            cell = i + env->cols * (env->rows - 1);
+            union_groups(env->p2, env->edge2, cell);
+        }
+    } else {
+        for (int i = 1; i < env->cols; i+=2) {
+            cell = i + env->cols * (env->rows - 1);
+            union_groups(env->p2, env->edge2, cell);
         }
     }
 }
@@ -57,14 +148,28 @@ void init(Hex* env) {
     env->player_to_move = PLAYER1;
     env->rows = env->grid_size, env->cols = env->grid_size * 2;
     env->total_tiles = env->rows * env->cols;
-    env->possible_moves = (int*)calloc(env->total_tiles, sizeof(int));
+    env->num_empty_tiles = env->total_tiles / 2;
+    env->possible_moves = (int*)calloc(env->num_empty_tiles, sizeof(int));
+    env->possible_moves_idx = (int*)calloc(env->total_tiles, sizeof(int));
     env->visited = (int*)calloc(env->total_tiles, sizeof(int));
-    env->board_states = (int*)calloc(env->total_tiles, sizeof(int));
     generate_board_positions(env);
     //env->reach_top = false;
     //env->reach_bot = false;
     //env->reach_left = false;
     //env->reach_right = false;
+    env->edge1 = env->total_tiles;
+    env->edge2 = env->edge1 + 1;
+    //env->reach_top.parent = -1;
+    //env->reach_top.size = 1;
+    //env->reach_bot.parent = -2;
+    //env->reach_bot.size = 1;
+    //env->reach_left.parent = -3;
+    //env->reach_left.size = 1;
+    //env->reach_right.parent = -4;
+    //env->reach_right.size = 1;
+    env->p1 = (Group*)calloc((env->total_tiles+2), sizeof(Group));
+    env->p2 = (Group*)calloc((env->total_tiles+2), sizeof(Group));
+    init_groups(env);
 }
 
 void allocate(Hex* env) {
@@ -77,7 +182,6 @@ void allocate(Hex* env) {
 }
 
 void free_initialized(Hex* env) {
-    free(env->board_states);
     free(env->visited);
     free(env->possible_moves);
 }
@@ -92,16 +196,17 @@ void free_allocated(Hex* env) {
 
 void reset(Hex* env) {
     memset(env->observations, EMPTY, env->total_tiles * sizeof(int));
-    memset(env->board_states, EMPTY, env->total_tiles * sizeof(int));
-    env->num_empty_tiles = get_posible_moves(env);
     generate_board_positions(env);
+    env->num_empty_tiles = get_possible_moves(env);
     memset(env->visited, 0, env->total_tiles * sizeof(int));
     env->terminals[0] = 0;
     env->rewards[0] = 0;
+    init_groups(env);
     //env->reach_top = false;
     //env->reach_bot = false;
     //env->reach_left = false;
     //env->reach_right = false;
+
 }
 
 int get_neighbors(Hex* env, int pos, int* neighbors){
@@ -109,14 +214,11 @@ int get_neighbors(Hex* env, int pos, int* neighbors){
     int col = pos % env->cols;
     int count = 0;
     
-    // Check if current position is valid hex position
-    // Even rows have hexes at even columns, odd rows at odd columns
     if ((row % 2) != (col % 2)) {
-        return 0;  // Invalid hex position
+        return 0;  
     }
 
     if (row % 2 == 1) {
-        // Neighbor offsets for both even and odd rows
         const int dr[] = {-1, -1, 0, 0, 1, 1};
         const int dc[] = {-1, 1, -2, 2, -3, -1};
     
@@ -139,7 +241,6 @@ int get_neighbors(Hex* env, int pos, int* neighbors){
             int new_row = row + dr[i];
             int new_col = col + dc[i];
             int new_pos = new_row * env->cols + new_col;
-            // Check bounds and ensure new position is valid hex position
             if (new_row >= 0 && new_row < env->rows &&
                 new_col >= 0 && new_col < env->cols &&
                 (new_row % 2) == (new_col % 2)) {
@@ -148,6 +249,23 @@ int get_neighbors(Hex* env, int pos, int* neighbors){
         }
     }
     return count;
+}
+
+void check_win_uf(Hex* env, int player, int pos){
+    Group* groups = (player == PLAYER1) ? env->p1 : env->p2;
+    int neighbors[6];
+    int num_neighbors = get_neighbors(env, pos, neighbors);
+    for (int i = 0; i < num_neighbors; i++) {
+        if (env->observations[neighbors[i]] == player) {
+            union_groups(groups, neighbors[i], pos);
+        }
+    }
+    
+    if (find(groups, env->edge1) == find(groups, env->edge2)) {
+        reset(env);
+        env->terminals[0] = 1;
+        env->rewards[0] = (player == PLAYER1) ? 1.0 : -1.0;
+    }
 }
 
 //bool dfs2(Hex* env, int pos, int player, bool reach_edge1, bool reach_edge2){
@@ -200,80 +318,75 @@ int get_neighbors(Hex* env, int pos, int* neighbors){
 //    }
 //}
 
-void dfs(Hex* env, int pos, int player){
-    int curr_row = pos / env->cols;
-    int curr_col = pos % env->cols;
-
-    if (player == PLAYER1){
-        if ((curr_col == env->cols - 1 && curr_row % 2 == 1) || 
-            (curr_col== env->cols - 2 && curr_row % 2 == 0)){
-            // printf("player 1 wins\n");
-            reset(env);
-            env->terminals[0] = 1;
-            env->rewards[0] = 1.0;
-            return;
-        }
-    }
-    else if (player == PLAYER2){
-        if (curr_row == env->rows - 1){
-            // printf("player 2 wins\n");
-            reset(env);
-            env->terminals[0] = 1;
-            env->rewards[0] = -1.0;
-            return;
-        }
-    }
-    env->visited[pos] = player;
-
-    int neighbors[6];
-    int num_neighbors = get_neighbors(env, pos, neighbors);
-    for (int i = 0; i < num_neighbors; i++) {
-        int neighbor = neighbors[i];
-        if (env->observations[neighbor] == player && env->visited[neighbor] != player){
-            env->visited[neighbor] = player;
-            dfs(env, neighbor, player);
-        }
-    }
-    return;
-}
-
-void check_win(Hex* env, int player, int possible_moves){
-    //if (!possible_moves) {
-    //    // printf("MATHEMATICALLY A DRAW IS NOT POSSIBLE\n");
-    //    reset(env);
-    //    env->terminals[0] = 1;
-    //    env->rewards[0] = 0.0;
-    //    return;
-    //}
-
-    memset(env->visited, 0, env->total_tiles * sizeof(int));
-    if (player == PLAYER1){
-        for (int row = 0; row < env->rows; row++) {
-            int cell;
-            if (row % 2 == 0) {
-                cell = row * env->cols;
-            }
-            else {
-                cell = row * env->cols + 1;
-            }
-            if (env->observations[cell] == PLAYER1) {
-                dfs(env, cell, player);
-               }
-        }
-    }
-    else {
-        for (int col = 0; col < env->cols; col+=2) {
-            int cell = col;
-            if (env->observations[cell] == PLAYER2) {
-                dfs(env, cell, player);
-            }
-        }
-    }
-}
+//void dfs(Hex* env, int pos, int player){
+//    int curr_row = pos / env->cols;
+//    int curr_col = pos % env->cols;
+//
+//    if (player == PLAYER1){
+//        if ((curr_col == env->cols - 1 && curr_row % 2 == 1) || 
+//            (curr_col== env->cols - 2 && curr_row % 2 == 0)){
+//            // printf("player 1 wins\n");
+//            reset(env);
+//            env->terminals[0] = 1;
+//            env->rewards[0] = 1.0;
+//            return;
+//        }
+//    }
+//    else if (player == PLAYER2){
+//        if (curr_row == env->rows - 1){
+//            // printf("player 2 wins\n");
+//            reset(env);
+//            env->terminals[0] = 1;
+//            env->rewards[0] = -1.0;
+//            return;
+//        }
+//    }
+//    env->visited[pos] = player;
+//
+//    int neighbors[6];
+//    int num_neighbors = get_neighbors(env, pos, neighbors);
+//    for (int i = 0; i < num_neighbors; i++) {
+//        int neighbor = neighbors[i];
+//        if (env->observations[neighbor] == player && env->visited[neighbor] != player){
+//            env->visited[neighbor] = player;
+//            dfs(env, neighbor, player);
+//        }
+//    }
+//    return;
+//}
+//
+//void check_win(Hex* env, int player, int possible_moves){
+//    memset(env->visited, 0, env->total_tiles * sizeof(int));
+//    if (player == PLAYER1){
+//        for (int row = 0; row < env->rows; row++) {
+//            int cell;
+//            if (row % 2 == 0) {
+//                cell = row * env->cols;
+//            }
+//            else {
+//                cell = row * env->cols + 1;
+//            }
+//            if (env->observations[cell] == PLAYER1) {
+//                dfs(env, cell, player);
+//               }
+//        }
+//    }
+//    else {
+//        for (int col = 0; col < env->cols; col+=2) {
+//            int cell = col;
+//            if (env->observations[cell] == PLAYER2) {
+//                dfs(env, cell, player);
+//            }
+//        }
+//    }
+//}
 
 void make_move(Hex* env, int pos, int player){
     // cannot place stone on occupied tile
     if (env->observations[pos] != EMPTY) {
+        return;
+    }
+    if (env->observations[pos] == INVALID_TILE) {
         return;
     }
     else {
@@ -281,20 +394,31 @@ void make_move(Hex* env, int pos, int player){
     }
 }
 
-int get_posible_moves(Hex* env){
-    memset(env->possible_moves, 0, env->total_tiles * sizeof(int));
+int get_possible_moves(Hex* env){
+    memset(env->possible_moves, 0, env->num_empty_tiles * sizeof(int));
     int count = 0;
 
-    for(int i = 0; i < env->total_tiles; i++){
+    for(int i = 0; i < env->total_tiles; i++) {
         if(env->observations[i] == EMPTY){
+            env->possible_moves_idx[i] = count;
             env->possible_moves[count++] = i;
+        } else {
+            env->possible_moves_idx[i] = -1;
         }
     }
     return count;
 }
 
+void update_possible_moves(Hex* env, int action){
+    int move_idx = env->possible_moves_idx[action];
+    int last_available_move = env->possible_moves[env->num_empty_tiles - 1];
+    env->possible_moves[move_idx] = last_available_move;
+    env->possible_moves_idx[last_available_move] = move_idx;
+    env->num_empty_tiles--;
+}
+
 void make_random_move(Hex* env, int player) {
-    int count = get_posible_moves(env);
+    int count = get_possible_moves(env);
     for(int i = count - 1; i > 0; i--){
         int j = rand() % (i + 1);
         int temp = env->possible_moves[i];
@@ -306,16 +430,19 @@ void make_random_move(Hex* env, int player) {
 }
 
 void step(Hex* env) {
-    env->num_empty_tiles = get_posible_moves(env);
+    //env->num_empty_tiles = get_possible_moves(env);
     // int action_idx = rand() % env->num_empty_tiles;
     //int action = env->possible_moves[action_idx];
     int action = env->actions[0];
     env->terminals[0] = 0;
     env->rewards[0] = 0;
-    make_move(env, action, env->player_to_move);
+    env->observations[action] = env->player_to_move;
+    // make_move(env, action, env->player_to_move);
+    update_possible_moves(env, action);
+    check_win_uf(env, env->player_to_move, action);
     //check_win(env, env->num_empty_tiles);
     //check_win2(env, env->player_to_move, action);
-    check_win(env, env->player_to_move, env->num_empty_tiles);
+    //check_win(env, env->player_to_move, env->num_empty_tiles);
     //check_win(env, PLAYER2, env->num_empty_tiles);
     env-> player_to_move = env->player_to_move ^ 3;
     //if (env->player_to_move == PLAYER1) {
@@ -343,7 +470,7 @@ Client* make_client(Hex* env) {
     Client* client = (Client*)calloc(1, sizeof(Client));
     int px = 128*env->grid_size;
     InitWindow(px, px, "PufferLib Hex");
-    SetTargetFPS(5);
+    SetTargetFPS(1);
 
     //client->agent = LoadTexture("resources/puffers_128.png");
     return client;
