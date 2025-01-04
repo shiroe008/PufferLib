@@ -76,7 +76,7 @@ struct Hex {
 
 void generate_board_positions(Hex* env) {
     // comment the line below when running in python
-    env->observations = (int*)calloc(env->total_tiles, sizeof(int));
+    //env->observations = (int*)calloc(env->total_tiles, sizeof(int));
     for (int row = 0; row < env->rows; row++) {
         for (int col = 0; col < env->cols; col++) {
             if ((row+col) % 2 != 0) {
@@ -152,7 +152,7 @@ void init(Hex* env) {
     env->possible_moves = (int*)calloc(env->num_empty_tiles, sizeof(int));
     env->possible_moves_idx = (int*)calloc(env->total_tiles, sizeof(int));
     env->visited = (int*)calloc(env->total_tiles, sizeof(int));
-    generate_board_positions(env);
+    //generate_board_positions(env);
     //env->reach_top = false;
     //env->reach_bot = false;
     //env->reach_left = false;
@@ -169,21 +169,24 @@ void init(Hex* env) {
     //env->reach_right.size = 1;
     env->p1 = (Group*)calloc((env->total_tiles+2), sizeof(Group));
     env->p2 = (Group*)calloc((env->total_tiles+2), sizeof(Group));
-    init_groups(env);
+    //init_groups(env);
 }
 
 void allocate(Hex* env) {
+    init(env);
     env->observations = (int*)calloc(env->total_tiles, sizeof(int));
     env->actions = (int*)calloc(1, sizeof(int));
     env->rewards = (float*)calloc(1, sizeof(float));
     env->terminals = (unsigned char*)calloc(1, sizeof(unsigned char));
-    init(env);
     // generate_board_positions(env);
 }
 
 void free_initialized(Hex* env) {
     free(env->visited);
     free(env->possible_moves);
+    free(env->possible_moves_idx);
+    free(env->p1);
+    free(env->p2);
 }
 
 void free_allocated(Hex* env) {
@@ -381,17 +384,13 @@ void check_win_uf(Hex* env, int player, int pos){
 //    }
 //}
 
-void make_move(Hex* env, int pos, int player){
+int can_make_move(Hex* env, int pos, int player){
     // cannot place stone on occupied tile
     if (env->observations[pos] != EMPTY) {
-        return;
+        return 0;
     }
-    if (env->observations[pos] == INVALID_TILE) {
-        return;
-    }
-    else {
-        env->observations[pos] = player;
-    }
+    env->observations[pos] = player;
+    return 1;
 }
 
 int get_possible_moves(Hex* env){
@@ -426,7 +425,7 @@ void make_random_move(Hex* env, int player) {
         env->possible_moves[j] = temp;
     }
     // Try to make a move in a random empty position
-    make_move(env, env->possible_moves[0], player);
+    can_make_move(env, env->possible_moves[0], player);
 }
 
 void step(Hex* env) {
@@ -436,15 +435,17 @@ void step(Hex* env) {
     int action = env->actions[0];
     env->terminals[0] = 0;
     env->rewards[0] = 0;
-    env->observations[action] = env->player_to_move;
+    if (can_make_move(env, action, env->player_to_move)) {
+        update_possible_moves(env, action);
+        check_win_uf(env, env->player_to_move, action);
+        env-> player_to_move = env->player_to_move ^ 3;
+    }
+    //env->observations[action] = env->player_to_move;
     // make_move(env, action, env->player_to_move);
-    update_possible_moves(env, action);
-    check_win_uf(env, env->player_to_move, action);
     //check_win(env, env->num_empty_tiles);
     //check_win2(env, env->player_to_move, action);
     //check_win(env, env->player_to_move, env->num_empty_tiles);
     //check_win(env, PLAYER2, env->num_empty_tiles);
-    env-> player_to_move = env->player_to_move ^ 3;
     //if (env->player_to_move == PLAYER1) {
     //    env->player_to_move = PLAYER2;
     //}
