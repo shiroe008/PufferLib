@@ -3,6 +3,13 @@ import numpy as np
 from libc.stdlib cimport calloc, free
 
 cdef extern from "hex.h":
+    ctypedef struct Group:
+        int parent
+        int size
+    
+    int find(Group*)
+    void union_groups(Group* int, int)
+
     ctypedef struct Hex:
         int* observations;
         int* actions;
@@ -13,17 +20,25 @@ cdef extern from "hex.h":
         int cols;
         int total_tiles;
         int* possible_moves;
+        int* possible_moves_idx;
         int num_empty_tiles;
-        int player_to_move;
+        unsigned char player_to_move;
         int* board_states;
         int* visited;
+        Group* p1;
+        Group* p2;
+        int edge1;
+        int edge2;
+        Group reach_top;
+        Group reach_bot;
+        Group reach_left;
+        Group reach_right;
 
     ctypedef struct Client
 
     void reset(Hex* env)
     void step(Hex* env)
     void init(Hex* env)
-    int get_posible_moves(Hex* env)
 
     Client* make_client(Hex* env)
     void close_client(Client* client)
@@ -35,11 +50,14 @@ cdef class CyHex:
         Client* client
         int num_envs
         int grid_size
-        object possible_moves
-        object num_valid_moves
+        # object possible_moves
+        # object num_valid_moves
+        int [:, :] possible_moves
+        int [:, :] possible_moves_idx
+        int [:] num_valid_moves
 
     def __init__(self, int[:, :] observations, int[:] actions, float[:] rewards, unsigned char[:] terminals, 
-                 int num_envs, int grid_size, int player_to_move):
+                 int num_envs, int grid_size,):
 
         self.envs = <Hex*> calloc(num_envs, sizeof(Hex))
         self.num_envs = num_envs
@@ -47,6 +65,7 @@ cdef class CyHex:
 
         self.num_valid_moves = np.zeros(num_envs, dtype=np.int32)
         self.possible_moves = np.zeros((num_envs, grid_size * grid_size), dtype=np.int32)
+        self.possible_moves_idx = np.zeros((num_envs, grid_size * grid_size), dtype=np.int32)
 
         cdef int i
         for i in range(num_envs):
@@ -56,9 +75,11 @@ cdef class CyHex:
                 rewards = &rewards[i],
                 terminals = &terminals[i],
                 grid_size = grid_size,
-                player_to_move = player_to_move,
             )
             init(&self.envs[i])
+            self.envs[i].possible_moves = &self.possible_moves[i, 0]
+            self.envs[i].possible_moves_idx = &self.possible_moves_idx[i, 0]
+            self.envs[i].num_empty_tiles = self.num_valid_moves[i]
             self.client = NULL
 
     def reset(self):
@@ -85,11 +106,14 @@ cdef class CyHex:
 
         free(self.envs)
 
-    def get_valid_moves(self):
-        cdef int i, j
-        for i in range(self.num_envs):
-            self.num_valid_moves[i] = get_posible_moves(&self.envs[i])
-            for j in range(self.num_valid_moves[i]):
-                self.possible_moves[i, j] = self.envs[i].possible_moves[j]
+    def get_posible_moves(self):
+        return self.c_envs.possible_moves, self.c_envs.num_empty_tiles
 
-        return self.possible_moves, self.num_valid_moves
+    def get_valid_moves(self):
+        cdef int i;
+        for i in range(self.num_envs):
+            self.num_valid_moves[i] = self.envs[i].num_empty_tiles
+            # for j in range(self.num_valid_moves[i]):
+            #     self.possible_moves[i, j] = self.envs[i].possible_moves[j]
+
+        return np.asarray(self.possible_moves), np.asarray(self.num_valid_moves)

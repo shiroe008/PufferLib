@@ -8,7 +8,7 @@ from pufferlib.ocean.hex.cy_hex import CyHex
 
 
 class Hex(pufferlib.PufferEnv):
-    def __init__(self, num_envs=1, render_mode=None, grid_size=11, player_to_move=1, buf=None):
+    def __init__(self, num_envs=1, render_mode=None, grid_size=11, buf=None):
         self.single_observation_space = gymnasium.spaces.Box(low=0, high=3,
             shape=(grid_size * grid_size * 2,), dtype=np.int32)
         self.single_action_space = gymnasium.spaces.Discrete(grid_size * grid_size * 2)
@@ -17,7 +17,7 @@ class Hex(pufferlib.PufferEnv):
 
         super().__init__(buf)
         self.c_envs = CyHex(self.observations, self.actions,
-            self.rewards, self.terminals, num_envs, grid_size, player_to_move=1)
+            self.rewards, self.terminals, num_envs, grid_size,)
  
     def reset(self, seed=None):
         self.c_envs.reset()
@@ -35,6 +35,8 @@ class Hex(pufferlib.PufferEnv):
                 'reward': np.mean(episode_returns),
             }]
 
+        # possible_moves, num_valid_moves = self.c_envs.get_valid_moves()
+
         return (self.observations, self.rewards,
             self.terminals, self.truncations, info)
 
@@ -44,8 +46,8 @@ class Hex(pufferlib.PufferEnv):
     def close(self):
         self.c_envs.close()
 
-def test_env(num_envs=1, grid_size=5, player_to_move=1):
-    env = Hex(num_envs=num_envs, grid_size=grid_size, player_to_move=player_to_move)
+def test_env(num_envs=1, grid_size=5,):
+    env = Hex(num_envs=num_envs, grid_size=grid_size,)
     env.reset()
     print(env.observations)
     while True:
@@ -63,24 +65,28 @@ def test_env(num_envs=1, grid_size=5, player_to_move=1):
         # if terms or trunc:
         #     break
 
-def test_performance(timeout=10,):
+def test_performance(timeout=10, atn_cache=1024):
     num_envs=1
-    env = Hex(num_envs=num_envs, grid_size=5, player_to_move=1)
+    env = Hex(num_envs=num_envs, grid_size=5,)
     env.reset()
     tick = 0
 
-    # actions = np.random.randint(0, env.single_action_space.n, (atn_cache, num_envs))
+    actions = np.random.randint(0, env.single_action_space.n, (atn_cache, num_envs))
 
     import time
     start = time.time()
     while time.time() - start < timeout:
+        action = actions[tick % atn_cache]
         # possible_moves = np.array([np.where(obs == 0) for obs in env.observations])
         # action = np.array([np.random.choice(moves[0]) for moves in possible_moves])
-        possible_moves, num_valid_moves = env.c_envs.get_valid_moves()
-        # print(num_valid_moves, )
-        action_idx = np.array([np.random.randint(nvm) for nvm in num_valid_moves], dtype=np.int32)
-        action = possible_moves[np.arange(num_envs), action_idx]
+        # possible_moves, num_valid_moves = env.c_envs.get_posible_moves()
+        # possible_moves, num_valid_moves = env.c_envs.get_valid_moves()
+        # print(num_valid_moves)
+        # print(possible_moves)
+        # action_idx = np.array([np.random.randint(nvm) for nvm in num_valid_moves], dtype=np.int32)
+        #action = possible_moves[np.arange(num_envs), action_idx]
         # atn = actions[tick % atn_cache]
+        # action = np.array([possible_moves[i, np.random.randint(nvm)] for i, nvm in enumerate(num_valid_moves)], dtype=np.int32)
         env.step(action)
         tick += 1
 
