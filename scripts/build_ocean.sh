@@ -5,7 +5,8 @@
 ENV=$1
 MODE=${2:-local}
 PLATFORM="$(uname -s)"
-SRC_DIR="../pufferlib/ocean/$ENV"
+SRC_DIR="pufferlib/ocean/$ENV"
+WEB_OUTPUT_DIR="build_web/$ENV"
 
 # Create build output directory
 mkdir -p "$WEB_OUTPUT_DIR"
@@ -41,10 +42,10 @@ fi
 
 FLAGS=(
     -Wall
-    -I../raylib/include 
-    -I../pufferlib
+    -I./raylib/include 
+    -I./pufferlib
     "$SRC_DIR/$ENV.c" -o "$ENV"
-    ../raylib/lib/libraylib.a
+    ./raylib/lib/libraylib.a
     -lm
     -lpthread
     -DPLATFORM_DESKTOP
