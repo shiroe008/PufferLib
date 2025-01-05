@@ -4,19 +4,10 @@
 #include <math.h>
 #include "raylib.h"
 
-const unsigned char NOOP = 0;
-const unsigned char DOWN = 1;
-const unsigned char UP = 2;
-const unsigned char LEFT = 3;
-const unsigned char RIGHT = 4;
-
 const int INVALID_TILE = 3;
 const int EMPTY = 0;
 const int PLAYER1 = 1;
 const int PLAYER2 = 2;
-
-const unsigned char AGENT = 1;
-const unsigned char TARGET = 2;
 
 typedef struct Group Group;
 struct Group {
@@ -68,15 +59,9 @@ struct Hex {
     Group reach_bot;
     Group reach_left;
     Group reach_right;
-    //bool reach_top;
-    //bool reach_bot;
-    //bool reach_left;
-    //bool reach_right;
 };
 
 void generate_board_positions(Hex* env) {
-    // comment the line below when running in python
-    //env->observations = (int*)calloc(env->total_tiles, sizeof(int));
     for (int row = 0; row < env->rows; row++) {
         for (int col = 0; col < env->cols; col++) {
             if ((row+col) % 2 != 0) {
@@ -103,7 +88,6 @@ void init_groups(Hex* env) {
     env->p2[env->edge2].size = 1;
 
     int cell;
-    // Join virtual left to left column
     for (int i = 0; i < env-> rows; i++) {
         if (i % 2 == 0) {
             cell = i * env->cols;
@@ -114,7 +98,6 @@ void init_groups(Hex* env) {
         }
     }
 
-    // Join virutal right to right column
     for (int i = 0; i < env->rows; i++) {
         if (i % 2 == 0) {
             cell = i * env->cols + env->cols - 2;
@@ -125,12 +108,10 @@ void init_groups(Hex* env) {
         }
     }
 
-    // Join virual top to top row
     for (int i = 0; i < env->cols; i+=2) {
         union_groups(env->p2, env->edge1, i);
     }
 
-    // Join virtual bottom to bottom row
     if (env->rows % 2 == 1) {
         for (int i = 0; i < env->cols; i+=2) {
             cell = i + env->cols * (env->rows - 1);
@@ -144,6 +125,21 @@ void init_groups(Hex* env) {
     }
 }
 
+int get_possible_moves(Hex* env){
+    memset(env->possible_moves, 0, env->num_empty_tiles * sizeof(int));
+    int count = 0;
+
+    for(int i = 0; i < env->total_tiles; i++) {
+        if(env->observations[i] == EMPTY){
+            env->possible_moves_idx[i] = count;
+            env->possible_moves[count++] = i;
+        } else {
+            env->possible_moves_idx[i] = -1;
+        }
+    }
+    return count;
+}
+
 void init(Hex* env) {
     env->player_to_move = PLAYER1;
     env->rows = env->grid_size, env->cols = env->grid_size * 2;
@@ -152,24 +148,10 @@ void init(Hex* env) {
     env->possible_moves = (int*)calloc(env->num_empty_tiles, sizeof(int));
     env->possible_moves_idx = (int*)calloc(env->total_tiles, sizeof(int));
     env->visited = (int*)calloc(env->total_tiles, sizeof(int));
-    //generate_board_positions(env);
-    //env->reach_top = false;
-    //env->reach_bot = false;
-    //env->reach_left = false;
-    //env->reach_right = false;
     env->edge1 = env->total_tiles;
     env->edge2 = env->edge1 + 1;
-    //env->reach_top.parent = -1;
-    //env->reach_top.size = 1;
-    //env->reach_bot.parent = -2;
-    //env->reach_bot.size = 1;
-    //env->reach_left.parent = -3;
-    //env->reach_left.size = 1;
-    //env->reach_right.parent = -4;
-    //env->reach_right.size = 1;
     env->p1 = (Group*)calloc((env->total_tiles+2), sizeof(Group));
     env->p2 = (Group*)calloc((env->total_tiles+2), sizeof(Group));
-    //init_groups(env);
 }
 
 void allocate(Hex* env) {
@@ -178,7 +160,6 @@ void allocate(Hex* env) {
     env->actions = (int*)calloc(1, sizeof(int));
     env->rewards = (float*)calloc(1, sizeof(float));
     env->terminals = (unsigned char*)calloc(1, sizeof(unsigned char));
-    // generate_board_positions(env);
 }
 
 void free_initialized(Hex* env) {
@@ -205,11 +186,6 @@ void reset(Hex* env) {
     env->terminals[0] = 0;
     env->rewards[0] = 0;
     init_groups(env);
-    //env->reach_top = false;
-    //env->reach_bot = false;
-    //env->reach_left = false;
-    //env->reach_right = false;
-
 }
 
 int get_neighbors(Hex* env, int pos, int* neighbors){
@@ -271,119 +247,6 @@ void check_win_uf(Hex* env, int player, int pos){
     }
 }
 
-//bool dfs2(Hex* env, int pos, int player, bool reach_edge1, bool reach_edge2){
-//    env->visited[pos] = player;
-//
-//    int curr_row = pos / env->cols;
-//    int curr_col = pos % env->cols;
-//    if (player == PLAYER1){
-//        if (curr_col == 0) reach_edge1 = true;
-//        else if (curr_col == 1) reach_edge1 = true;
-//        else if (curr_col == env->cols - 1) reach_edge2 = true;
-//        else if (curr_col == env->cols - 2) reach_edge2 = true;
-//    } else {
-//        if (curr_row == 0) reach_edge1 = true;
-//        else if (curr_row == env->rows - 1) reach_edge2 = true;
-//    }
-//
-//    if (reach_edge1 && reach_edge2) return true;
-//
-//    int neighbors[6];
-//    int num_neighbors = get_neighbors(env, pos, neighbors);
-//    for (int i = 0; i < num_neighbors; i++) {
-//        int neighbor = neighbors[i];
-//        if (env->observations[neighbor] == player && env->visited[neighbor] != player){
-//            dfs2(env, neighbor, player, reach_edge1, reach_edge2);
-//        }
-//    }
-//    return false;
-//}
-//
-//void check_win2(Hex* env, int player, int pos){
-//    memset(env->visited, 0, env->total_tiles * sizeof(int));
-//    bool has_won;
-//    if (player == PLAYER1){
-//        has_won = dfs2(env, player, pos, env->reach_left, env->reach_right);
-//        if (has_won){
-//            reset(env);
-//            env->terminals[0] = 1;
-//            env->rewards[0] = 1.0;
-//            return;
-//        }
-//    } else {
-//        has_won = dfs2(env, player, pos, env->reach_left, env->reach_right);
-//        if (has_won){
-//            reset(env);
-//            env->terminals[0] = 1;
-//            env->rewards[0] = -1.0;
-//            return;
-//        }
-//    }
-//}
-
-//void dfs(Hex* env, int pos, int player){
-//    int curr_row = pos / env->cols;
-//    int curr_col = pos % env->cols;
-//
-//    if (player == PLAYER1){
-//        if ((curr_col == env->cols - 1 && curr_row % 2 == 1) || 
-//            (curr_col== env->cols - 2 && curr_row % 2 == 0)){
-//            // printf("player 1 wins\n");
-//            reset(env);
-//            env->terminals[0] = 1;
-//            env->rewards[0] = 1.0;
-//            return;
-//        }
-//    }
-//    else if (player == PLAYER2){
-//        if (curr_row == env->rows - 1){
-//            // printf("player 2 wins\n");
-//            reset(env);
-//            env->terminals[0] = 1;
-//            env->rewards[0] = -1.0;
-//            return;
-//        }
-//    }
-//    env->visited[pos] = player;
-//
-//    int neighbors[6];
-//    int num_neighbors = get_neighbors(env, pos, neighbors);
-//    for (int i = 0; i < num_neighbors; i++) {
-//        int neighbor = neighbors[i];
-//        if (env->observations[neighbor] == player && env->visited[neighbor] != player){
-//            env->visited[neighbor] = player;
-//            dfs(env, neighbor, player);
-//        }
-//    }
-//    return;
-//}
-//
-//void check_win(Hex* env, int player, int possible_moves){
-//    memset(env->visited, 0, env->total_tiles * sizeof(int));
-//    if (player == PLAYER1){
-//        for (int row = 0; row < env->rows; row++) {
-//            int cell;
-//            if (row % 2 == 0) {
-//                cell = row * env->cols;
-//            }
-//            else {
-//                cell = row * env->cols + 1;
-//            }
-//            if (env->observations[cell] == PLAYER1) {
-//                dfs(env, cell, player);
-//               }
-//        }
-//    }
-//    else {
-//        for (int col = 0; col < env->cols; col+=2) {
-//            int cell = col;
-//            if (env->observations[cell] == PLAYER2) {
-//                dfs(env, cell, player);
-//            }
-//        }
-//    }
-//}
-
 int can_make_move(Hex* env, int pos, int player){
     // cannot place stone on occupied tile
     if (env->observations[pos] != EMPTY) {
@@ -391,21 +254,6 @@ int can_make_move(Hex* env, int pos, int player){
     }
     env->observations[pos] = player;
     return 1;
-}
-
-int get_possible_moves(Hex* env){
-    memset(env->possible_moves, 0, env->num_empty_tiles * sizeof(int));
-    int count = 0;
-
-    for(int i = 0; i < env->total_tiles; i++) {
-        if(env->observations[i] == EMPTY){
-            env->possible_moves_idx[i] = count;
-            env->possible_moves[count++] = i;
-        } else {
-            env->possible_moves_idx[i] = -1;
-        }
-    }
-    return count;
 }
 
 void update_possible_moves(Hex* env, int action){
@@ -424,14 +272,10 @@ void make_random_move(Hex* env, int player) {
         env->possible_moves[i] = env->possible_moves[j];
         env->possible_moves[j] = temp;
     }
-    // Try to make a move in a random empty position
     can_make_move(env, env->possible_moves[0], player);
 }
 
 void step(Hex* env) {
-    //env->num_empty_tiles = get_possible_moves(env);
-    // int action_idx = rand() % env->num_empty_tiles;
-    //int action = env->possible_moves[action_idx];
     int action = env->actions[0];
     env->terminals[0] = 0;
     env->rewards[0] = 0;
@@ -440,19 +284,6 @@ void step(Hex* env) {
         check_win_uf(env, env->player_to_move, action);
         env-> player_to_move = env->player_to_move ^ 3;
     }
-    //env->observations[action] = env->player_to_move;
-    // make_move(env, action, env->player_to_move);
-    //check_win(env, env->num_empty_tiles);
-    //check_win2(env, env->player_to_move, action);
-    //check_win(env, env->player_to_move, env->num_empty_tiles);
-    //check_win(env, PLAYER2, env->num_empty_tiles);
-    //if (env->player_to_move == PLAYER1) {
-    //    env->player_to_move = PLAYER2;
-    //}
-    //else {
-    //    env->player_to_move = PLAYER1;
-    //}   
-    //make_random_move(env, env->player_to_move);
 }
 
 const Color STONE_GRAY = (Color){80, 80, 80, 255};
@@ -473,7 +304,6 @@ Client* make_client(Hex* env) {
     InitWindow(px, px, "PufferLib Hex");
     SetTargetFPS(1);
 
-    //client->agent = LoadTexture("resources/puffers_128.png");
     return client;
 }
 
@@ -493,16 +323,6 @@ void render(Client* client, Hex* env) {
     float radius = 20.0;
     float cos30 = cos(30 * M_PI / 180);
     
-    //env->observations[2*env->cols + 0] = PLAYER1;
-    //env->observations[2*env->cols + 2] = PLAYER1;
-    //env->observations[0*env->cols + 4] = PLAYER2;
-    //env->observations[1*env->cols + 5] = PLAYER2;
-    //env->observations[2*env->cols + 4] = PLAYER2;
-    //env->observations[3*env->cols + 5] = PLAYER2;
-    //env->observations[4*env->cols + 4] = PLAYER2;
-    //env->observations[2*env->cols + 6] = PLAYER1;
-    //env->observations[2*env->cols + 8] = PLAYER1;
-
     for (int row = 0; row < env->rows; row++) {
         for (int col = 0; col < env->cols; col++) {
             int tile_type= env->observations[row * env->cols + col];

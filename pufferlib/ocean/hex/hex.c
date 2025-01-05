@@ -7,23 +7,11 @@ void demo(){
 
     Hex env = { .grid_size = 5};
     allocate(&env);
-    // init(&env);
-    // generate_board_positions(&env);
 
     Client* client = make_client(&env);
     reset(&env);
     int action_idx;
     while (!WindowShouldClose()) {
-        if (IsKeyDown(KEY_LEFT_SHIFT)) {
-            env.actions[0] = 0;
-            if (IsKeyDown(KEY_UP)    || IsKeyDown(KEY_W)) env.actions[0] = UP;
-            if (IsKeyDown(KEY_DOWN)  || IsKeyDown(KEY_S)) env.actions[0] = DOWN;
-            if (IsKeyDown(KEY_LEFT)  || IsKeyDown(KEY_A)) env.actions[0] = LEFT;
-            if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) env.actions[0] = RIGHT;
-        } else {
-            env.actions[0] = NOOP;
-            //forward_linearlstm(net, env.observations, env.actions);
-        }
         action_idx = rand() % env.num_empty_tiles;
         env.actions[0] = env.possible_moves[action_idx];
         step(&env);
@@ -44,7 +32,7 @@ void test_performance(float test_time) {
     int i = 0;
     int action_idx;
     while (time(NULL) - start < test_time) {
-        int action_idx = rand() % env.num_empty_tiles;
+        action_idx = rand() % env.num_empty_tiles;
         env.actions[0] = env.possible_moves[action_idx];
         step(&env);
         i++;

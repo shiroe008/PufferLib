@@ -81,10 +81,8 @@ def test_performance(timeout=10, atn_cache=1024):
         # action = np.array([np.random.choice(moves[0]) for moves in possible_moves])
         # possible_moves, num_valid_moves = env.c_envs.get_posible_moves()
         # possible_moves, num_valid_moves = env.c_envs.get_valid_moves()
-        # print(num_valid_moves)
-        # print(possible_moves)
         # action_idx = np.array([np.random.randint(nvm) for nvm in num_valid_moves], dtype=np.int32)
-        #action = possible_moves[np.arange(num_envs), action_idx]
+        # action = possible_moves[np.arange(num_envs), action_idx]
         # atn = actions[tick % atn_cache]
         # action = np.array([possible_moves[i, np.random.randint(nvm)] for i, nvm in enumerate(num_valid_moves)], dtype=np.int32)
         env.step(action)
