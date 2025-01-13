@@ -8,6 +8,8 @@ const int INVALID_TILE = 3;
 const int EMPTY = 0;
 const int PLAYER1 = 1;
 const int PLAYER2 = 2;
+#define NUM_DIRECTIONS 6
+static const int DIRECTIONS[NUM_DIRECTIONS][2] = {{0, -1}, {0, 1}, {-1, 0}, {-1, 1}, {1, -1}, {1, 0}};
 
 typedef struct Group Group;
 struct Group {
@@ -43,14 +45,10 @@ struct Hex {
     float* rewards;
     unsigned char* terminals;
     int grid_size;
-    int rows;
-    int cols;
-    int total_tiles;
     int* possible_moves;
     int* possible_moves_idx;
     int num_empty_tiles;
     unsigned char player_to_move;
-    int* visited;
     Group* p1;
     Group* p2;
     int edge1;
@@ -61,22 +59,12 @@ struct Hex {
     Group reach_right;
 };
 
-void generate_board_positions(Hex* env) {
-    for (int row = 0; row < env->rows; row++) {
-        for (int col = 0; col < env->cols; col++) {
-            if ((row+col) % 2 != 0) {
-                env->observations[row * env->cols + col] = INVALID_TILE;
-            }
-        }
-    }
-}
-
-void init_groups(Hex* env) {
-    for (int i = 0; i < env->total_tiles; i++) {
-            env->p1[i].parent = i;
-            env->p1[i].size = 1;
-            env->p2[i].parent = i;
-            env->p2[i].size = 1;
+void init_groups2(Hex* env) {
+    for (int i = 0; i < env->grid_size * env->grid_size; i++) {
+        env->p1[i].parent = i;
+        env->p1[i].size = 1;
+        env->p2[i].parent = i;
+        env->p2[i].size = 1;
     }
     env->p1[env->edge1].parent = env->edge1;
     env->p1[env->edge1].size = 1;
@@ -88,82 +76,55 @@ void init_groups(Hex* env) {
     env->p2[env->edge2].size = 1;
 
     int cell;
-    for (int i = 0; i < env-> rows; i++) {
-        if (i % 2 == 0) {
-            cell = i * env->cols;
-            union_groups(env->p1, env->edge1, cell);
-        } else {
-            cell = i * env->cols + 1;
-            union_groups(env->p1, env->edge1, cell);
-        }
-    }
 
-    for (int i = 0; i < env->rows; i++) {
-        if (i % 2 == 0) {
-            cell = i * env->cols + env->cols - 2;
-            union_groups(env->p1, env->edge2, cell);
-        } else {
-            cell = i * env->cols + env->cols - 1;
-            union_groups(env->p1,  env->edge2, cell);
-        }
-    }
+    for (int i = 0; i < env->grid_size; i++) {
+        cell = i * env->grid_size;
+        union_groups(env->p1, env->edge1, cell);
+        
+        cell = i * env->grid_size + env->grid_size - 1;
+        union_groups(env->p1, env->edge2, cell);
 
-    for (int i = 0; i < env->cols; i+=2) {
-        union_groups(env->p2, env->edge1, i);
-    }
+        cell = i;
+        union_groups(env->p2, env->edge1, cell);
 
-    if (env->rows % 2 == 1) {
-        for (int i = 0; i < env->cols; i+=2) {
-            cell = i + env->cols * (env->rows - 1);
-            union_groups(env->p2, env->edge2, cell);
-        }
-    } else {
-        for (int i = 1; i < env->cols; i+=2) {
-            cell = i + env->cols * (env->rows - 1);
-            union_groups(env->p2, env->edge2, cell);
-        }
+        cell = i + env->grid_size * (env->grid_size - 1);
+        union_groups(env->p2, env->edge2, cell);
     }
 }
+
 
 int get_possible_moves(Hex* env){
     memset(env->possible_moves, 0, env->num_empty_tiles * sizeof(int));
     int count = 0;
 
-    for(int i = 0; i < env->total_tiles; i++) {
+    for(int i = 0; i < env->grid_size * env->grid_size; i++) {
         if(env->observations[i] == EMPTY){
             env->possible_moves_idx[i] = count;
             env->possible_moves[count++] = i;
-        } else {
-            env->possible_moves_idx[i] = -1;
         }
     }
     return count;
 }
 
 void init(Hex* env) {
-    env->player_to_move = PLAYER1;
-    env->rows = env->grid_size, env->cols = env->grid_size * 2;
-    env->total_tiles = env->rows * env->cols;
-    env->num_empty_tiles = env->total_tiles / 2;
+    env->num_empty_tiles = env->grid_size * env->grid_size;
     env->possible_moves = (int*)calloc(env->num_empty_tiles, sizeof(int));
-    env->possible_moves_idx = (int*)calloc(env->total_tiles, sizeof(int));
-    env->visited = (int*)calloc(env->total_tiles, sizeof(int));
-    env->edge1 = env->total_tiles;
+    env->possible_moves_idx = (int*)calloc(env->num_empty_tiles, sizeof(int));
+    env->edge1 = env->grid_size * env->grid_size;
     env->edge2 = env->edge1 + 1;
-    env->p1 = (Group*)calloc((env->total_tiles+2), sizeof(Group));
-    env->p2 = (Group*)calloc((env->total_tiles+2), sizeof(Group));
+    env->p1 = (Group*)calloc((env->grid_size * env->grid_size + 2), sizeof(Group));
+    env->p2 = (Group*)calloc((env->grid_size * env->grid_size + 2), sizeof(Group));
 }
 
 void allocate(Hex* env) {
     init(env);
-    env->observations = (int*)calloc(env->total_tiles, sizeof(int));
+    env->observations = (int*)calloc(env->grid_size * env->grid_size, sizeof(int));
     env->actions = (int*)calloc(1, sizeof(int));
     env->rewards = (float*)calloc(1, sizeof(float));
     env->terminals = (unsigned char*)calloc(1, sizeof(unsigned char));
 }
 
 void free_initialized(Hex* env) {
-    free(env->visited);
     free(env->possible_moves);
     free(env->possible_moves_idx);
     free(env->p1);
@@ -179,67 +140,31 @@ void free_allocated(Hex* env) {
 }
 
 void reset(Hex* env) {
-    memset(env->observations, EMPTY, env->total_tiles * sizeof(int));
-    generate_board_positions(env);
+    env->player_to_move = PLAYER1;
+    memset(env->observations, EMPTY, env->grid_size * env->grid_size * sizeof(int));
     env->num_empty_tiles = get_possible_moves(env);
-    memset(env->visited, 0, env->total_tiles * sizeof(int));
     env->terminals[0] = 0;
     env->rewards[0] = 0;
-    init_groups(env);
-}
-
-int get_neighbors(Hex* env, int pos, int* neighbors){
-    int row = pos / env->cols;
-    int col = pos % env->cols;
-    int count = 0;
-    
-    if ((row % 2) != (col % 2)) {
-        return 0;  
-    }
-
-    if (row % 2 == 1) {
-        const int dr[] = {-1, -1, 0, 0, 1, 1};
-        const int dc[] = {-1, 1, -2, 2, -3, -1};
-    
-        for (int i = 0; i < 6; i++) {
-            int new_row = row + dr[i];
-            int new_col = col + dc[i];
-            int new_pos = new_row * env->cols + new_col;
-            if (new_row >= 0 && new_row < env->rows && 
-                new_col >= 0 && new_col < env->cols && 
-                (new_row % 2) == (new_col % 2)) {
-                neighbors[count++] = new_pos;
-            }
-        } 
-    }
-    else {
-        const int dr[] = {-1, -1, 0, 0, 1, 1};
-        const int dc[] = {3, 1, -2, 2, -1, 1};
-    
-        for (int i = 0; i < 6; i++) {
-            int new_row = row + dr[i];
-            int new_col = col + dc[i];
-            int new_pos = new_row * env->cols + new_col;
-            if (new_row >= 0 && new_row < env->rows &&
-                new_col >= 0 && new_col < env->cols &&
-                (new_row % 2) == (new_col % 2)) {
-                neighbors[count++] = new_pos;
-            }
-        }
-    }
-    return count;
+    init_groups2(env);
 }
 
 void check_win_uf(Hex* env, int player, int pos){
     Group* groups = (player == PLAYER1) ? env->p1 : env->p2;
-    int neighbors[6];
-    int num_neighbors = get_neighbors(env, pos, neighbors);
-    for (int i = 0; i < num_neighbors; i++) {
-        if (env->observations[neighbors[i]] == player) {
-            union_groups(groups, neighbors[i], pos);
+    int row = pos / env->grid_size;
+    int col = pos % env->grid_size;
+
+    for (int i = 0; i < NUM_DIRECTIONS; i++) {
+        int row_neigh = row + DIRECTIONS[i][0];
+        int col_neigh = col + DIRECTIONS[i][1];
+        int pos_neigh = row_neigh * env->grid_size + col_neigh;
+        if (row_neigh < 0 || row_neigh >= env->grid_size || 
+            col_neigh < 0 || col_neigh >= env->grid_size || 
+            env->observations[pos_neigh] != player) {
+            continue;
         }
+        union_groups(groups, pos_neigh, pos);
     }
-    
+
     if (find(groups, env->edge1) == find(groups, env->edge2)) {
         reset(env);
         env->terminals[0] = 1;
@@ -248,7 +173,6 @@ void check_win_uf(Hex* env, int player, int pos){
 }
 
 int can_make_move(Hex* env, int pos, int player){
-    // cannot place stone on occupied tile
     if (env->observations[pos] != EMPTY) {
         return 0;
     }
@@ -322,36 +246,23 @@ void render(Client* client, Hex* env) {
 
     float radius = 20.0;
     float cos30 = cos(30 * M_PI / 180);
+    Color color;
     
-    for (int row = 0; row < env->rows; row++) {
-        for (int col = 0; col < env->cols; col++) {
-            int tile_type= env->observations[row * env->cols + col];
-            if (tile_type == INVALID_TILE) {
-                continue;
+    for (int row = 0; row < env->grid_size; row++) {
+        for (int col = 0; col < env->grid_size; col++) {
+            int tile_type= env->observations[row * env->grid_size + col];
+            if (tile_type == EMPTY) {
+                color = PUFF_WHITE;
             }
-            else {
-                Color color;
-                if (tile_type == EMPTY) {
-                    color = PUFF_WHITE;
-                }
-                else if (tile_type == PLAYER1) {
-                    color = PUFF_RED;
-                } else if (tile_type == PLAYER2) {
-                    color = PUFF_CYAN;
-                }
-                if (row % 2 == 0) {
-                    DrawPoly((Vector2){200 + cos30 * (row+col) * radius,
-                            200 + row * radius * 1.5}, 6, radius, 90, color);
-                    DrawPolyLines((Vector2){200 + cos30 * (row+col) * radius,
-                            200 + row * radius * 1.5}, 6, radius, 90, STONE_GRAY);
-                }
-                else {
-                    DrawPoly((Vector2){200 + cos30 * ((2*col-1)/2 + row) * radius,
-                            200 + row * radius * 1.5}, 6, radius, 90, color);
-                    DrawPolyLines((Vector2){200 + cos30 * ((2*col-1)/2 + row) * radius,
-                            200 + row * radius * 1.5}, 6, radius, 90, STONE_GRAY);
-                }
+            else if (tile_type == PLAYER1) {
+                color = PUFF_RED;
+            } else if (tile_type == PLAYER2) {
+                color = PUFF_CYAN;
             }
+            DrawPoly((Vector2){200 + cos30 * (2 * col + row) * radius,
+                    200 + row * radius * 1.5}, 6, radius, 90, color);
+            DrawPolyLines((Vector2){200 + cos30 * (2 * col + row) * radius,
+                    200 + row * radius * 1.5}, 6, radius, 90, STONE_GRAY);
         }
     }
     EndDrawing();
