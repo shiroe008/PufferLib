@@ -16,23 +16,15 @@ cdef extern from "hex.h":
         float* rewards;
         unsigned char* terminals;
         int grid_size;
-        int rows;
-        int cols;
-        int total_tiles;
         int* possible_moves;
         int* possible_moves_idx;
         int num_empty_tiles;
         unsigned char player_to_move;
         int* board_states;
-        int* visited;
         Group* p1;
         Group* p2;
         int edge1;
         int edge2;
-        Group reach_top;
-        Group reach_bot;
-        Group reach_left;
-        Group reach_right;
 
     ctypedef struct Client
 
@@ -50,8 +42,6 @@ cdef class CyHex:
         Client* client
         int num_envs
         int grid_size
-        # object possible_moves
-        # object num_valid_moves
         int [:, :] possible_moves
         int [:, :] possible_moves_idx
         int [:] num_valid_moves

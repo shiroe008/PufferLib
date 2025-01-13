@@ -9,9 +9,9 @@ from pufferlib.ocean.hex.cy_hex import CyHex
 
 class Hex(pufferlib.PufferEnv):
     def __init__(self, num_envs=1, render_mode=None, grid_size=11, buf=None):
-        self.single_observation_space = gymnasium.spaces.Box(low=0, high=3,
-            shape=(grid_size * grid_size * 2,), dtype=np.int32)
-        self.single_action_space = gymnasium.spaces.Discrete(grid_size * grid_size * 2)
+        self.single_observation_space = gymnasium.spaces.Box(low=0, high=2,
+            shape=(grid_size * grid_size,), dtype=np.int32)
+        self.single_action_space = gymnasium.spaces.Discrete(grid_size * grid_size)
         self.render_mode = render_mode
         self.num_agents = num_envs
 
