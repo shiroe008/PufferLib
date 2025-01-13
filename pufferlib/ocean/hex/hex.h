@@ -53,10 +53,6 @@ struct Hex {
     Group* p2;
     int edge1;
     int edge2;
-    Group reach_top;
-    Group reach_bot;
-    Group reach_left;
-    Group reach_right;
 };
 
 void init_groups2(Hex* env) {
