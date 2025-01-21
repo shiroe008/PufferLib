@@ -3,6 +3,23 @@ import numpy as np
 from libc.stdlib cimport calloc, free
 
 cdef extern from "hex.h":
+
+    int LOG_BUFFER_SIZE
+
+    ctypedef struct Log:
+        float episode_return
+        float episode_length
+        int games_played
+        float winrate
+
+    ctypedef struct LogBuffer:
+        Log* logs
+        int length
+        int idx
+    LogBuffer* allocate_logbuffer(int)
+    void free_logbuffer(LogBuffer*)
+    Log aggregate_and_clear(LogBuffer*)
+
     ctypedef struct Group:
         int parent
         int size
@@ -15,6 +32,8 @@ cdef extern from "hex.h":
         int* actions;
         float* rewards;
         unsigned char* terminals;
+        LogBuffer* log_buffer
+        Log log
         int grid_size;
         int* possible_moves;
         int* possible_moves_idx;
@@ -40,6 +59,7 @@ cdef class CyHex:
     cdef:
         Hex* envs
         Client* client
+        LogBuffer* logs
         int num_envs
         int grid_size
         int [:, :] possible_moves
@@ -52,10 +72,11 @@ cdef class CyHex:
         self.envs = <Hex*> calloc(num_envs, sizeof(Hex))
         self.num_envs = num_envs
         self.client = NULL
+        self.logs = allocate_logbuffer(LOG_BUFFER_SIZE)
 
-        self.num_valid_moves = np.zeros(num_envs, dtype=np.int32)
-        self.possible_moves = np.zeros((num_envs, grid_size * grid_size), dtype=np.int32)
-        self.possible_moves_idx = np.zeros((num_envs, grid_size * grid_size), dtype=np.int32)
+        self.num_valid_moves = np.zeros(self.num_envs, dtype=np.int32)
+        self.possible_moves = np.zeros((self.num_envs, grid_size * grid_size), dtype=np.int32)
+        self.possible_moves_idx = np.zeros((self.num_envs, grid_size * grid_size), dtype=np.int32)
 
         cdef int i
         for i in range(num_envs):
@@ -65,6 +86,7 @@ cdef class CyHex:
                 rewards = &rewards[i],
                 terminals = &terminals[i],
                 grid_size = grid_size,
+                log_buffer=self.logs,
             )
             init(&self.envs[i])
             self.envs[i].possible_moves = &self.possible_moves[i, 0]
@@ -95,6 +117,10 @@ cdef class CyHex:
             self.client = NULL
 
         free(self.envs)
+
+    def log(self):
+        cdef Log log = aggregate_and_clear(self.logs)
+        return log
 
     def get_posible_moves(self):
         return self.c_envs.possible_moves, self.c_envs.num_empty_tiles

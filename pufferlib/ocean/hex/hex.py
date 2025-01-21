@@ -8,12 +8,13 @@ from pufferlib.ocean.hex.cy_hex import CyHex
 
 
 class Hex(pufferlib.PufferEnv):
-    def __init__(self, num_envs=1, render_mode=None, grid_size=11, buf=None):
+    def __init__(self, num_envs=1, render_mode=None, report_interval=1, grid_size=11, buf=None):
         self.single_observation_space = gymnasium.spaces.Box(low=0, high=2,
             shape=(grid_size * grid_size,), dtype=np.int32)
         self.single_action_space = gymnasium.spaces.Discrete(grid_size * grid_size)
         self.render_mode = render_mode
         self.num_agents = num_envs
+        self.report_interval = report_interval
 
         super().__init__(buf)
         self.c_envs = CyHex(self.observations, self.actions,
@@ -21,20 +22,26 @@ class Hex(pufferlib.PufferEnv):
  
     def reset(self, seed=None):
         self.c_envs.reset()
+        self.tick = 0
         return self.observations, []
 
     def step(self, actions):
         self.actions[:] = actions
         self.c_envs.step()
+        self.tick += 1
 
         episode_returns = self.rewards[self.terminals]
 
         info = []
-        if len(episode_returns) > 0:
-            info = [{
-                'reward': np.mean(episode_returns),
-            }]
+        # if len(episode_returns) > 0:
+        #     info = [{
+        #         'reward': np.mean(episode_returns),
+        #     }]
 
+        if self.tick % self.report_interval == 0:
+            log = self.c_envs.log()
+            if log['episode_length'] > 0:
+                info.append(log)
         # possible_moves, num_valid_moves = self.c_envs.get_valid_moves()
 
         return (self.observations, self.rewards,
@@ -49,7 +56,6 @@ class Hex(pufferlib.PufferEnv):
 def test_env(num_envs=1, grid_size=5,):
     env = Hex(num_envs=num_envs, grid_size=grid_size,)
     env.reset()
-    print(env.observations)
     while True:
         env.render()
         possible_moves = np.array([np.where(obs == 0) for obs in env.observations])
@@ -66,7 +72,7 @@ def test_env(num_envs=1, grid_size=5,):
         #     break
 
 def test_performance(timeout=10, atn_cache=1024):
-    num_envs=1
+    num_envs=1000
     env = Hex(num_envs=num_envs, grid_size=5,)
     env.reset()
     tick = 0

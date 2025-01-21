@@ -11,6 +11,62 @@ const int PLAYER2 = 2;
 #define NUM_DIRECTIONS 6
 static const int DIRECTIONS[NUM_DIRECTIONS][2] = {{0, -1}, {0, 1}, {-1, 0}, {-1, 1}, {1, -1}, {1, 0}};
 
+#define LOG_BUFFER_SIZE 1024
+
+typedef struct Log Log;
+struct Log {
+    float episode_return;
+    float episode_length;
+    int games_played;
+    float winrate;
+};
+
+typedef struct LogBuffer LogBuffer;
+struct LogBuffer {
+    Log* logs;
+    int length;
+    int idx;
+};
+
+LogBuffer* allocate_logbuffer(int size) {
+    LogBuffer* logs = (LogBuffer*)calloc(1, sizeof(LogBuffer));
+    logs->logs = (Log*)calloc(size, sizeof(Log));
+    logs->length = size;
+    logs->idx = 0;
+    return logs;
+}
+
+void free_logbuffer(LogBuffer* buffer) {
+    free(buffer->logs);
+    free(buffer);
+}
+
+void add_log(LogBuffer* logs, Log* log) {
+    if (logs->idx == logs->length) {
+        return;
+    }
+    logs->logs[logs->idx] = *log;
+    logs->idx += 1;
+}
+
+Log aggregate_and_clear(LogBuffer* logs) {
+    Log log = {0};
+    if (logs->idx == 0) {
+        return log;
+    }
+    for (int i = 0; i < logs->idx; i++) {
+        log.episode_return += logs->logs[i].episode_return;
+        log.episode_length += logs->logs[i].episode_length;
+        log.games_played += logs->logs[i].games_played;
+	    log.winrate += logs->logs[i].winrate;
+    }
+    log.episode_return /= logs->idx;
+    log.episode_length /= logs->idx;
+    log.winrate /= logs->idx;
+    logs->idx = 0;
+    return log;
+}
+
 typedef struct Group Group;
 struct Group {
     int parent;
@@ -44,6 +100,8 @@ struct Hex {
     int* actions;
     float* rewards;
     unsigned char* terminals;
+    LogBuffer* log_buffer;
+    Log log;
     int grid_size;
     int* possible_moves;
     int* possible_moves_idx;
@@ -118,6 +176,7 @@ void allocate(Hex* env) {
     env->actions = (int*)calloc(1, sizeof(int));
     env->rewards = (float*)calloc(1, sizeof(float));
     env->terminals = (unsigned char*)calloc(1, sizeof(unsigned char));
+    env->log_buffer = allocate_logbuffer(LOG_BUFFER_SIZE);
 }
 
 void free_initialized(Hex* env) {
@@ -132,15 +191,17 @@ void free_allocated(Hex* env) {
     free(env->actions);
     free(env->rewards);
     free(env->terminals);
+    free_logbuffer(env->log_buffer);
     free_initialized(env);
 }
 
 void reset(Hex* env) {
+    env->log = (Log){0};
     env->player_to_move = PLAYER1;
     memset(env->observations, EMPTY, env->grid_size * env->grid_size * sizeof(int));
     env->num_empty_tiles = get_possible_moves(env);
-    env->terminals[0] = 0;
-    env->rewards[0] = 0;
+    // env->terminals[0] = 0;
+    // env->rewards[0] = 0;
     init_groups2(env);
 }
 
@@ -165,6 +226,10 @@ void check_win_uf(Hex* env, int player, int pos){
         reset(env);
         env->terminals[0] = 1;
         env->rewards[0] = (player == PLAYER1) ? 1.0 : -1.0;
+        env->log.winrate = (player == PLAYER1) ? 1.0 : -1.0;
+        env->log.games_played++;
+        env->log.episode_return += env->rewards[0];
+        add_log(env->log_buffer, &env->log);
     }
 }
 
@@ -196,6 +261,7 @@ void make_random_move(Hex* env, int player) {
 }
 
 void step(Hex* env) {
+    env->log.episode_length += 1;
     int action = env->actions[0];
     env->terminals[0] = 0;
     env->rewards[0] = 0;
