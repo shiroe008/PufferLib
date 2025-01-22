@@ -8,6 +8,7 @@ from .pong.pong import Pong
 from .breakout.breakout import Breakout
 from .enduro.enduro import Enduro
 from .connect4.connect4 import Connect4
+from .hex.hex import Hex
 from .tripletriad.tripletriad import TripleTriad
 from .tactical.tactical import Tactical
 from .moba.moba import Moba
@@ -137,6 +138,7 @@ MAKE_FNS = {
     'snake': Snake,
     'squared': Squared,
     'squared2': Squared2,
+    'hex': Hex,
     'connect4': Connect4,
     'tripletriad': TripleTriad,
     'tactical': Tactical,

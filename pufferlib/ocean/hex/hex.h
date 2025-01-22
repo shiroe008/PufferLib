@@ -223,21 +223,26 @@ void check_win_uf(Hex* env, int player, int pos){
     }
 
     if (find(groups, env->edge1) == find(groups, env->edge2)) {
-        reset(env);
+        //printf("player %d won\n", player);
         env->terminals[0] = 1;
         env->rewards[0] = (player == PLAYER1) ? 1.0 : -1.0;
         env->log.winrate = (player == PLAYER1) ? 1.0 : -1.0;
         env->log.games_played++;
         env->log.episode_return += env->rewards[0];
         add_log(env->log_buffer, &env->log);
+        reset(env);
     }
 }
 
 int can_make_move(Hex* env, int pos, int player){
     if (env->observations[pos] != EMPTY) {
+        env->rewards[0] = -0.5;
+        env->log.episode_return -= 0.5;
         return 0;
     }
     env->observations[pos] = player;
+    env->rewards[0] = 0.01;
+    env->log.episode_return += 0.01;
     return 1;
 }
 
@@ -250,25 +255,32 @@ void update_possible_moves(Hex* env, int action){
 }
 
 void make_random_move(Hex* env, int player) {
-    int count = get_possible_moves(env);
-    for(int i = count - 1; i > 0; i--){
-        int j = rand() % (i + 1);
-        int temp = env->possible_moves[i];
-        env->possible_moves[i] = env->possible_moves[j];
-        env->possible_moves[j] = temp;
+    // int count = get_possible_moves(env);
+    // for(int i = count - 1; i > 0; i--){
+    //     int j = rand() % (i + 1);
+    //     int temp = env->possible_moves[i];
+    //     env->possible_moves[i] = env->possible_moves[j];
+    //     env->possible_moves[j] = temp;
+    // }
+    int action_idx = rand() % env->num_empty_tiles;
+    int action = env->possible_moves[action_idx];
+    if (can_make_move(env, action, player)){
+        update_possible_moves(env, action);
+        check_win_uf(env, player, action);
+        env->player_to_move = env->player_to_move ^ 3;
     }
-    can_make_move(env, env->possible_moves[0], player);
 }
 
 void step(Hex* env) {
     env->log.episode_length += 1;
     int action = env->actions[0];
     env->terminals[0] = 0;
-    env->rewards[0] = 0;
+    //env->rewards[0] = 0;
     if (can_make_move(env, action, env->player_to_move)) {
         update_possible_moves(env, action);
         check_win_uf(env, env->player_to_move, action);
         env-> player_to_move = env->player_to_move ^ 3;
+        make_random_move(env, env->player_to_move);
     }
 }
 
@@ -288,7 +300,7 @@ Client* make_client(Hex* env) {
     Client* client = (Client*)calloc(1, sizeof(Client));
     int px = 128*env->grid_size;
     InitWindow(px, px, "PufferLib Hex");
-    SetTargetFPS(1);
+    SetTargetFPS(60);
 
     return client;
 }
