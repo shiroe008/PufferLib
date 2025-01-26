@@ -19,6 +19,7 @@ struct Log {
     float episode_length;
     int games_played;
     float winrate;
+    int illegal_moves;
 };
 
 typedef struct LogBuffer LogBuffer;
@@ -59,10 +60,12 @@ Log aggregate_and_clear(LogBuffer* logs) {
         log.episode_length += logs->logs[i].episode_length;
         log.games_played += logs->logs[i].games_played;
 	    log.winrate += logs->logs[i].winrate;
+        log.illegal_moves += logs->logs[i].illegal_moves;
     }
     log.episode_return /= logs->idx;
     log.episode_length /= logs->idx;
     log.winrate /= logs->idx;
+    log.illegal_moves /= logs->idx;
     logs->idx = 0;
     return log;
 }
@@ -238,6 +241,7 @@ int can_make_move(Hex* env, int pos, int player){
     if (env->observations[pos] != EMPTY) {
         env->rewards[0] = -0.5;
         env->log.episode_return -= 0.5;
+        env->log.illegal_moves++;
         return 0;
     }
     env->observations[pos] = player;
@@ -300,7 +304,7 @@ Client* make_client(Hex* env) {
     Client* client = (Client*)calloc(1, sizeof(Client));
     int px = 128*env->grid_size;
     InitWindow(px, px, "PufferLib Hex");
-    SetTargetFPS(60);
+    SetTargetFPS(4);
 
     return client;
 }

@@ -11,6 +11,7 @@ cdef extern from "hex.h":
         float episode_length
         int games_played
         float winrate
+        int illegal_moves
 
     ctypedef struct LogBuffer:
         Log* logs
