@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include "raylib.h"
+#include <time.h>
 
 const int INVALID_TILE = 3;
 const int EMPTY = 0;
@@ -199,7 +200,9 @@ void free_allocated(Hex* env) {
 }
 
 void reset(Hex* env) {
+    srand(time(NULL));
     env->log = (Log){0};
+
     env->player_to_move = PLAYER1;
     memset(env->observations, EMPTY, env->grid_size * env->grid_size * sizeof(int));
     env->num_empty_tiles = get_possible_moves(env);
@@ -208,7 +211,7 @@ void reset(Hex* env) {
     init_groups2(env);
 }
 
-void check_win_uf(Hex* env, int player, int pos){
+int check_win_uf(Hex* env, int player, int pos){
     Group* groups = (player == PLAYER1) ? env->p1 : env->p2;
     int row = pos / env->grid_size;
     int col = pos % env->grid_size;
@@ -226,7 +229,7 @@ void check_win_uf(Hex* env, int player, int pos){
     }
 
     if (find(groups, env->edge1) == find(groups, env->edge2)) {
-        //printf("player %d won\n", player);
+        // printf("player %d won\n", player);
         env->terminals[0] = 1;
         env->rewards[0] = (player == PLAYER1) ? 1.0 : -1.0;
         env->log.winrate = (player == PLAYER1) ? 1.0 : -1.0;
@@ -234,7 +237,9 @@ void check_win_uf(Hex* env, int player, int pos){
         env->log.episode_return += env->rewards[0];
         add_log(env->log_buffer, &env->log);
         reset(env);
+        return 1;
     }
+    return 0;
 }
 
 int can_make_move(Hex* env, int pos, int player){
@@ -275,16 +280,86 @@ void make_random_move(Hex* env, int player) {
     }
 }
 
+int get_heuristic_score(Hex* env, int pos, int player) {
+    int row = pos / env->grid_size;
+    int col = pos % env->grid_size;
+    int score = 0;
+    int friendly_neighbors = 0;
+    int enemy_neighbors = 0;
+    
+    int center_dist = abs(row - env->grid_size/2) + abs(col - env->grid_size/2);
+    score += (env->grid_size - center_dist);
+
+    for (int i = 0; i < NUM_DIRECTIONS; i++) {
+        int row_neigh = row + DIRECTIONS[i][0];
+        int col_neigh = col + DIRECTIONS[i][1];
+        int pos_neigh = row_neigh * env->grid_size + col_neigh;
+        
+        if (row_neigh < 0 || row_neigh >= env->grid_size || 
+            col_neigh < 0 || col_neigh >= env->grid_size) {
+            continue;
+        }
+        
+        if (env->observations[pos_neigh] == player) {
+            friendly_neighbors++;
+            score += 2;  
+        } else if (env->observations[pos_neigh] == (player ^ 3)) {  
+            enemy_neighbors++;
+            score += 3;  
+        }
+    }
+
+    if (friendly_neighbors >= 2) {
+        score += 3;
+    }
+
+
+    if (enemy_neighbors >= 2) {
+        score += 4;
+    }
+
+    if (player == PLAYER1) {
+        if (col == 0 || col == env->grid_size - 1) score += 2;
+    } else {
+        if (row == 0 || row == env->grid_size - 1) score += 2;
+    }
+
+    return score;
+}
+
+void make_heuristic_move(Hex* env, int player){
+    int best_score = -1;
+    int best_move = -1;
+
+    for (int i = 0; i < env->num_empty_tiles; i++) {
+        int pos = env->possible_moves[i];
+        int score = get_heuristic_score(env, pos, player);
+
+        if (score > best_score) {
+            best_score = score;
+            best_move = pos;
+        }
+    }
+
+    if (best_move != -1 && can_make_move(env, best_move, player)) {
+        update_possible_moves(env, best_move);
+        if (check_win_uf(env, player, best_move)) return;
+        env->player_to_move = env->player_to_move ^ 3;
+    }
+}
+
 void step(Hex* env) {
     env->log.episode_length += 1;
     int action = env->actions[0];
     env->terminals[0] = 0;
     //env->rewards[0] = 0;
+
     if (can_make_move(env, action, env->player_to_move)) {
         update_possible_moves(env, action);
-        check_win_uf(env, env->player_to_move, action);
+        if (check_win_uf(env, env->player_to_move, action)) return;
         env-> player_to_move = env->player_to_move ^ 3;
-        make_random_move(env, env->player_to_move);
+        // make_random_move(env, env->player_to_move);
+        make_heuristic_move(env, env->player_to_move);
     }
 }
 

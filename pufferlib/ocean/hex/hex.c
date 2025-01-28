@@ -5,7 +5,7 @@ void demo(){
     //Weights* weights = load_weights("resources/pong_weights.bin", 133764);
     //LinearLSTM* net = make_linearlstm(weights, 1, 8, 3);
 
-    Hex env = { .grid_size = 5};
+    Hex env = { .grid_size = 11};
     allocate(&env);
 
     Client* client = make_client(&env);
@@ -43,7 +43,7 @@ void test_performance(float test_time) {
 }
 
 int main() {
-    //demo();
-    test_performance(5);
+    demo();
+    //test_performance(5);
     return 0;
 }
