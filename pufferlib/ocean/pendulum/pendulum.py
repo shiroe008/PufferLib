@@ -1,10 +1,10 @@
 import numpy as np
 import gymnasium
 import pufferlib
-from pufferlib.ocean.cartpole import binding
+from pufferlib.ocean.pendulum import binding
 
-class Cartpole(pufferlib.PufferEnv):
-    def __init__(self, num_envs=1, render_mode='human', report_interval=1, continuous=True, buf=None, seed=0):
+class Pendulum(pufferlib.PufferEnv):
+    def __init__(self, num_envs=1, render_mode='human', report_interval=1, buf=None, seed=0):
         self.render_mode = render_mode
         self.num_agents = num_envs
         self.report_interval = report_interval
@@ -12,17 +12,14 @@ class Cartpole(pufferlib.PufferEnv):
         self.continuous = continuous
         self.human_action = None
 
-        self.num_obs = 4
+        self.num_obs = 3
         self.single_observation_space = gymnasium.spaces.Box(
             low=-np.inf, high=np.inf, shape=(self.num_obs,), dtype=np.float32
         )
-        if self.continuous:
-            self.single_action_space = gymnasium.spaces.Box(
-                low=-1.0, high=1.0, shape=(1,)
-            )
-            
-        else:
-            self.single_action_space = gymnasium.spaces.Discrete(2)
+
+        self.single_action_space = gymnasium.spaces.Box(
+            low=-2.0, high=2.0, shape=(1,)
+        )
 
         super().__init__(buf)
         self.actions = np.zeros(num_envs, dtype=np.float32)
@@ -35,9 +32,8 @@ class Cartpole(pufferlib.PufferEnv):
             self.truncations,
             num_envs,
             seed,
-            continuous=int(self.continuous),
         )
-   
+
     def reset(self, seed=None):
         self.tick = 0      
         if seed is None:
@@ -45,12 +41,9 @@ class Cartpole(pufferlib.PufferEnv):
         else:
             binding.vec_reset(self.c_envs, seed)
         return self.observations, []
-   
+
     def step(self, actions):
-        if self.continuous:
-            self.actions[:] = np.clip(actions.flatten(), -1.0, 1.0)
-        else:
-            self.actions[:] = actions
+        self.actions[:] = np.clip(actions.flatten(), -2.0, 2.0)
         
         self.tick += 1    
         binding.vec_step(self.c_envs)
@@ -76,14 +69,11 @@ class Cartpole(pufferlib.PufferEnv):
 def test_performance(timeout=10, atn_cache=8192, continuous=True):
     """Benchmark environment performance."""
     num_envs = 4096
-    env = Cartpole(num_envs=num_envs, continuous=continuous)
+    env = Pendulum(num_envs=num_envs,)
     env.reset()
     tick = 0
 
-    if env.continuous:
-        actions = np.random.uniform(-1, 1, (atn_cache, num_envs, 1)).astype(np.float32)
-    else:
-        actions = np.random.randint(0, env.single_action_space.n, (atn_cache, num_envs)).astype(np.int8)
+    actions = np.random.uniform(-2, 2, (atn_cache, num_envs, 1)).astype(np.float32)
 
     import time
     start = time.time()

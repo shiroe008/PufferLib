@@ -127,6 +127,8 @@ MAKE_FUNCTIONS = {
     'enduro': 'Enduro',
     'tetris': 'Tetris',
     'cartpole': 'Cartpole',
+    'pendulum': 'Pendulum',
+    'acrobat': 'Acrobat',
     'moba': 'Moba',
     'boids': 'Boids',
     'drone': 'Drone',
